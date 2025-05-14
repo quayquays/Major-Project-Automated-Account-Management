@@ -22,7 +22,7 @@
     $ vim dormanttoolchecker.sh
     *press "i"*
     *go to github & copy paste the dormanttoolchecker.sh into the file"
-    *press ":wq"* & enter ( to save and exit the file )
+    *press ":wq"* & enter
     $ chmod u+x dormanttoolchecker.sh
     $ ./dormanttoolchecker.sh
 
