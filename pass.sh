@@ -69,7 +69,7 @@ generate_report() {
     mkdir -p "$REPORT_DIR"
 
     human_readable_time=$(date "+%d %B %Y %H:%M")
-    safe_filename_time=$(date "+%d %B %Y %H:%M")
+    safe_filename_time=$(date "+%d_%b_%Y_%I-%M_%p")
 
     report_file="$REPORT_DIR/dormant_report_${safe_filename_time}.txt"
 
@@ -108,7 +108,7 @@ generate_report() {
         echo "---------------------------------------------------------------------------"
     } > "$report_file"
 
-    echo "Report generated at: \"$report_file\""
+    echo "Report generated at: $report_file"
 }
 
 # Run
