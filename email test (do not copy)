@@ -11,3 +11,9 @@ $TTL 1D
 ns1     IN        A 192.168.250.7
 mail    IN        A 192.168.250.7
 @       IN        MX 5 mail
+
+
+zone "test.com." {
+       type master;
+       file "db.test";
+};
