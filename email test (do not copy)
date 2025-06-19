@@ -1,19 +1,79 @@
-$ORIGIN test.com.
-$TTL 1D
-@       IN SOA     ns1 root(
-                1 ;serial
-                1D ;refresh
-                2H ;retry
-                2W ;expire
-                5H ;minimum
-);
-@       IN        NS ns1
-ns1     IN        A 192.168.250.7
-mail    IN        A 192.168.250.7
-@       IN        MX 5 mail
+IN DORMANT.SH :
+
+get_user_email() {
+    local username="$1"
+    grep "^$username=" /etc/user_emails.conf | cut -d'=' -f2
+}
+
+send_email_to_user() {
+    local user="$1"
+    local user_email="$2"
+    local inactive_days="$3"
+    local server_url="http://yourserver"
+    local deadline_date=$(date -d "+7 days" +"%Y-%m-%d")
+
+    local html_file="/tmp/email_${user}.html"
+
+    cat <<EOF > "$html_file"
+<html>
+<body>
+<p>Hello ${user},</p>
+
+<p>Your account has been inactive for <b>${inactive_days} days</b>. In 7 days, it will be deactivated unless you confirm to keep it.</p>
+
+<p>
+    <a href="${server_url}/confirm?user=${user}&response=yes" style="padding:10px 20px; background-color:green; color:white; text-decoration:none;">Yes, keep my account</a>
+</p>
+<p>
+    <a href="${server_url}/confirm?user=${user}&response=no" style="padding:10px 20px; background-color:red; color:white; text-decoration:none;">No, deactivate my account</a>
+</p>
+
+<p>If you do not respond by <b>${deadline_date}</b>, your account will be automatically deactivated.</p>
+
+</body>
+</html>
+EOF
+
+    # Send the email using sendemail
+    sendemail -f your@gmail.com -t "$user_email" \
+    -u "⚠️ Action Required: Your Linux Account Is About to Expire" \
+    -o message-content-type=html -o message-file="$html_file" \
+    -s smtp.gmail.com:587 -o tls=yes -xu your@gmail.com -xp your_app_password
+}
 
 
-zone "test.com." {
-       type master;
-       file "db.test";
-};
+modify :
+detect_dormant_user() {
+    dormant_detected_user=()
+
+    for user in $user_account; do
+        lastlogin_raw=$(lastlog -u "$user" | awk 'NR==2')
+
+        if [[ "$lastlogin_raw" == *"Never logged in"* ]]; then
+            continue
+        fi
+
+        last_login_date=$(echo "$lastlogin_raw" | awk '{print $4, $5, $6}')
+
+        if [[ -n "$last_login_date" ]]; then
+            if last_login_ts=$(date -d "$last_login_date" +%s 2>/dev/null); then
+                today_ts=$(date +%s)
+                diff_days=$(( (today_ts - last_login_ts) / 86400 ))
+
+                if [ "$diff_days" -eq $((DORMANT_USERACCOUNT_DURATION - 7)) ]; then
+                    email=$(get_user_email "$user")
+                    if [[ -n "$email" ]]; then
+                        send_email_to_user "$user" "$email" "$diff_days"
+                        echo "📧 Email sent to $user ($email)"
+                    else
+                        echo "⚠️  Email for $user not found."
+                    fi
+                fi
+
+                if [ "$diff_days" -ge "$DORMANT_USERACCOUNT_DURATION" ]; then
+                    dormant_detected_user+=("$user")
+                fi
+            fi
+        fi
+    done
+}
