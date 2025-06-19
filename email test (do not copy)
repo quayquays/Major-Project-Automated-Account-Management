@@ -89,3 +89,35 @@ detect_dormant_user() {
 
     echo "---------------------------------------------------------------------------"
 }
+
+
+# confirm_server.py
+from flask import Flask, request
+import subprocess
+
+app = Flask(__name__)
+
+@app.route('/confirm')
+def confirm():
+    user = request.args.get("user")
+    response = request.args.get("response")
+
+    if not user or not response:
+        return "Invalid link", 400
+
+    if response == "yes":
+        # Just reset the dormancy manually (e.g., touch login timestamp file)
+        with open("/var/dormant_responses.log", "a") as f:
+            f.write(f"{user},YES\n")
+        return f"✅ Your account will remain active. Thank you, {user}!"
+    elif response == "no":
+        subprocess.run(["sudo", "usermod", "--expiredate", "1", user])
+        with open("/var/dormant_responses.log", "a") as f:
+            f.write(f"{user},NO\n")
+        return f"❌ Your account has been deactivated, {user}."
+    else:
+        return "Invalid response", 400
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=80)
+
