@@ -46,10 +46,15 @@ modify :
 detect_dormant_user() {
     dormant_detected_user=()
 
+    echo "---------------------------------------------------------------------------"
+    echo "Last Login Summary 🧾"
+    echo "---------------------------------------------------------------------------"
+
     for user in $user_account; do
         lastlogin_raw=$(lastlog -u "$user" | awk 'NR==2')
 
         if [[ "$lastlogin_raw" == *"Never logged in"* ]]; then
+            echo "$user: Never logged in"
             continue
         fi
 
@@ -60,20 +65,27 @@ detect_dormant_user() {
                 today_ts=$(date +%s)
                 diff_days=$(( (today_ts - last_login_ts) / 86400 ))
 
+                # Print tabulated info
+                printf "%-10s  Last login: %-15s  Inactive: %3d days\n" "$user" "$last_login_date" "$diff_days"
+
+                # Email warning if exactly 7 days before dormancy threshold
                 if [ "$diff_days" -eq $((DORMANT_USERACCOUNT_DURATION - 7)) ]; then
                     email=$(get_user_email "$user")
                     if [[ -n "$email" ]]; then
                         send_email_to_user "$user" "$email" "$diff_days"
                         echo "📧 Email sent to $user ($email)"
                     else
-                        echo "⚠️  Email for $user not found."
+                        echo "⚠️  No email found for $user"
                     fi
                 fi
 
+                # If already dormant
                 if [ "$diff_days" -ge "$DORMANT_USERACCOUNT_DURATION" ]; then
                     dormant_detected_user+=("$user")
                 fi
             fi
         fi
     done
+
+    echo "---------------------------------------------------------------------------"
 }
