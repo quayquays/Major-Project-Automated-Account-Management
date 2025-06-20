@@ -164,49 +164,38 @@ detect_dormant_user() {
 }
 
 
-generate_report() {
-    REPORT_DIR="/dormant_reports"
-    mkdir -p "$REPORT_DIR"
+detect_dormant_user() {
+    dormant_detected_user=()
+    dormant_email_log=()
 
-    human_readable_time=$(date "+%d %B %Y %H:%M")
-    safe_filename_time=$(date "+%d_%b_%Y_%I-%M_%p")
+    for user in $user_account; do
+        lastlogin_raw=$(lastlog -u "$user" | awk 'NR==2')
 
-    report_file="$REPORT_DIR/dormant_report_${safe_filename_time}.txt"
-
-    {
-        echo "---------------------------------------------------------------------------"
-        echo "Dormant Users & Email Notification Report 📧"
-        echo "Generated on: $human_readable_time"
-        echo "---------------------------------------------------------------------------"
-        echo "Dormant Users 👥"
-        echo "---------------------------------------------------------------------------"
-
-        if [ ${#dormant_detected_user[@]} -eq 0 ]; then
-            echo "No dormant users found."
-        else
-            count=1
-            for user in "${dormant_detected_user[@]}"; do
-                echo "$count. $user"
-                ((count++))
-            done
+        if [[ "$lastlogin_raw" == *"Never logged in"* ]]; then
+            continue
         fi
 
-        echo
-        echo "---------------------------------------------------------------------------"
-        echo "Email Notifications 📮"
-        echo "---------------------------------------------------------------------------"
+        last_login_date=$(echo "$lastlogin_raw" | awk '{print $4, $5, $6}')
 
-        if [ ${#dormant_email_log[@]} -eq 0 ]; then
-            echo "No email notifications were triggered."
-        else
-            for line in "${dormant_email_log[@]}"; do
-                echo "$line"
-            done
+        if [[ -n "$last_login_date" ]]; then
+            if last_login_ts=$(date -d "$last_login_date" +%s 2>/dev/null); then
+                today_ts=$(date +%s)
+                diff_days=$(( (today_ts - last_login_ts) / 86400 ))
+
+                if [ "$diff_days" -eq $((DORMANT_USERACCOUNT_DURATION - 7)) ]; then
+                    email=$(get_user_email "$user")
+                    if [[ -n "$email" ]]; then
+                        send_email_to_user "$user" "$email" "$diff_days"
+                        dormant_email_log+=("Email sent to $user ($email)")
+                    else
+                        dormant_email_log+=("⚠️ No email found for $user")
+                    fi
+                fi
+
+                if [ "$diff_days" -ge "$DORMANT_USERACCOUNT_DURATION" ]; then
+                    dormant_detected_user+=("$user")
+                fi
+            fi
         fi
-
-        echo "---------------------------------------------------------------------------"
-    } > "$report_file"
-
-    echo "Report generated at: $report_file"
+    done
 }
-
