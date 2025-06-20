@@ -162,3 +162,51 @@ detect_dormant_user() {
         fi
     done
 }
+
+
+generate_report() {
+    REPORT_DIR="/dormant_reports"
+    mkdir -p "$REPORT_DIR"
+
+    human_readable_time=$(date "+%d %B %Y %H:%M")
+    safe_filename_time=$(date "+%d_%b_%Y_%I-%M_%p")
+
+    report_file="$REPORT_DIR/dormant_report_${safe_filename_time}.txt"
+
+    {
+        echo "---------------------------------------------------------------------------"
+        echo "Dormant Users & Email Notification Report 📧"
+        echo "Generated on: $human_readable_time"
+        echo "---------------------------------------------------------------------------"
+        echo "Dormant Users 👥"
+        echo "---------------------------------------------------------------------------"
+
+        if [ ${#dormant_detected_user[@]} -eq 0 ]; then
+            echo "No dormant users found."
+        else
+            count=1
+            for user in "${dormant_detected_user[@]}"; do
+                echo "$count. $user"
+                ((count++))
+            done
+        fi
+
+        echo
+        echo "---------------------------------------------------------------------------"
+        echo "Email Notifications 📮"
+        echo "---------------------------------------------------------------------------"
+
+        if [ ${#dormant_email_log[@]} -eq 0 ]; then
+            echo "No email notifications were triggered."
+        else
+            for line in "${dormant_email_log[@]}"; do
+                echo "$line"
+            done
+        fi
+
+        echo "---------------------------------------------------------------------------"
+    } > "$report_file"
+
+    echo "Report generated at: $report_file"
+}
+
