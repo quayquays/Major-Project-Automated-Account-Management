@@ -1,6 +1,3 @@
-##NOT DONE YET 
-
-
 #!/bin/bash
 
 REPORT_DIR="/dormant_reports"
@@ -230,83 +227,33 @@ update_config() {
             dialog --msgbox "Updated password expiry to $NEW days." 6 50
             ;;
         4)
-            TIME=$(dialog --clear --backtitle "Cron Job Setup" \
-                --title "Select Cron Time" \
-                --menu "Choose when to run the dormant script daily:" 20 60 24 \
-                "0 0 * * *"   "12:00 AM" \
-                "30 0 * * *"  "12:30 AM" \
-                "0 1 * * *"   "01:00 AM" \
-                "30 1 * * *"  "01:30 AM" \
-                "0 2 * * *"   "02:00 AM" \
-                "30 2 * * *"  "02:30 AM" \
-                "0 3 * * *"   "03:00 AM" \
-                "30 3 * * *"  "03:30 AM" \
-                "0 4 * * *"   "04:00 AM" \
-                "30 4 * * *"  "04:30 AM" \
-                "0 5 * * *"   "05:00 AM" \
-                "30 5 * * *"  "05:30 AM" \
-                "0 6 * * *"   "06:00 AM" \
-                "30 6 * * *"  "06:30 AM" \
-                "0 7 * * *"   "07:00 AM" \
-                "30 7 * * *"  "07:30 AM" \
-                "0 8 * * *"   "08:00 AM" \
-                "30 8 * * *"  "08:30 AM" \
-                "0 9 * * *"   "09:00 AM" \
-                "30 9 * * *"  "09:30 AM" \
-                "0 10 * * *"  "10:00 AM" \
-                "30 10 * * *" "10:30 AM" \
-                "0 11 * * *"  "11:00 AM" \
-                "30 11 * * *" "11:30 AM" \
-                "0 12 * * *"  "12:00 PM" \
-                "30 12 * * *" "12:30 PM" \
-                "0 13 * * *"  "01:00 PM" \
-                "30 13 * * *" "01:30 PM" \
-                "0 14 * * *"  "02:00 PM" \
-                "30 14 * * *" "02:30 PM" \
-                "0 15 * * *"  "03:00 PM" \
-                "30 15 * * *" "03:30 PM" \
-                "0 16 * * *"  "04:00 PM" \
-                "30 16 * * *" "04:30 PM" \
-                "0 17 * * *"  "05:00 PM" \
-                "30 17 * * *" "05:30 PM" \
-                "0 18 * * *"  "06:00 PM" \
-                "30 18 * * *" "06:30 PM" \
-                "0 19 * * *"  "07:00 PM" \
-                "30 19 * * *" "07:30 PM" \
-                "0 20 * * *"  "08:00 PM" \
-                "30 20 * * *" "08:30 PM" \
-                "0 21 * * *"  "09:00 PM" \
-                "30 21 * * *" "09:30 PM" \
-                "0 22 * * *"  "10:00 PM" \
-                "30 22 * * *" "10:30 PM" \
-                "0 23 * * *"  "11:00 PM" \
-                "30 23 * * *" "11:30 PM" \
+            TIME=$(dialog --clear --backtitle "Cron Job Scheduler" --menu "Choose a predefined cron schedule:" 15 60 6 \
+                1 "Daily at midnight (0 0 * * *)" \
+                2 "Every hour (0 * * * *)" \
+                3 "Every 15 minutes (*/15 * * * *)" \
+                4 "Every 30 minutes (*/30 * * * *)" \
+                5 "Every 5 minutes (*/5 * * * *)" \
+                6 "Back" \
                 3>&1 1>&2 2>&3)
 
-            if [ -n "$TIME" ]; then
-                sudo sed -i "s|^DORMANT_CRON_SCHEDULE=.*|DORMANT_CRON_SCHEDULE=\"$TIME\"|" "$CONFIG_FILE"
-                (crontab -l 2>/dev/null | grep -v "/usr/local/bin/dormant.sh" ; echo "$TIME bash /usr/local/bin/dormant.sh") | crontab -
-                dialog --msgbox "Cron job updated to: $TIME" 6 50
-            else
-                dialog --msgbox "Cron update canceled." 6 40
-            fi
+            case $TIME in
+                1) SCHEDULE="0 0 * * *" ;;
+                2) SCHEDULE="0 * * * *" ;;
+                3) SCHEDULE="*/15 * * * *" ;;
+                4) SCHEDULE="*/30 * * * *" ;;
+                5) SCHEDULE="*/5 * * * *" ;;
+                *) return ;;
+            esac
+
+            sudo sed -i "s/^DORMANT_CRON_SCHEDULE=.*/DORMANT_CRON_SCHEDULE=\"$SCHEDULE\"/" "$CONFIG_FILE"
+            dialog --msgbox "Cron schedule updated to: $SCHEDULE" 6 50
             ;;
         5)
-            while true; do
-                CUSTOM_CRON=$(dialog --inputbox "Enter custom cron schedule (min hour dom mon dow):\nExample: 15 3 * * * for 3:15 AM daily" 10 60 2>&1 >/dev/tty)
-                if [[ "$CUSTOM_CRON" =~ ^([0-9\*\/,-]+)\ ([0-9\*\/,-]+)\ ([0-9\*\/,-]+)\ ([0-9\*\/,-]+)\ ([0-9\*\/,-]+)$ ]]; then
-                    sudo sed -i "s|^DORMANT_CRON_SCHEDULE=.*|DORMANT_CRON_SCHEDULE=\"$CUSTOM_CRON\"|" "$CONFIG_FILE"
-                    (crontab -l 2>/dev/null | grep -v "/usr/local/bin/dormant.sh" ; echo "$CUSTOM_CRON bash /usr/local/bin/dormant.sh") | crontab -
-                    dialog --msgbox "Custom cron job set to: $CUSTOM_CRON" 6 50
-                    break
-                else
-                    dialog --yesno "Invalid cron format. Try again?" 7 40
-                    if [ $? -ne 0 ]; then
-                        dialog --msgbox "Cancelled cron update." 6 40
-                        break
-                    fi
-                fi
-            done
+            NEW=$(dialog --inputbox "Enter custom cron schedule (e.g. 0 2 * * *):" 8 60 2>&1 >/dev/tty)
+            sudo sed -i "s/^DORMANT_CRON_SCHEDULE=.*/DORMANT_CRON_SCHEDULE=\"$NEW\"/" "$CONFIG_FILE"
+            dialog --msgbox "Custom cron schedule set to: $NEW" 6 60
+            ;;
+        *)
             ;;
     esac
 }
@@ -319,15 +266,15 @@ edit_existing_user() {
         done < "$EMAIL_CONF"
     fi
 
-    mapfile -t all_users < <(awk -F: '($3>=1000)&&($1!="nobody"){print $1}' /etc/passwd)
-
-    if [ ${#all_users[@]} -eq 0 ]; then
-        dialog --msgbox "No standard users found." 8 40
-        return
-    fi
-
     while true; do
-        # Search user prompt
+        # Refresh user list each loop
+        mapfile -t all_users < <(awk -F: '($3>=1000)&&($1!="nobody"){print $1}' /etc/passwd)
+
+        if [ ${#all_users[@]} -eq 0 ]; then
+            dialog --msgbox "No standard users found." 8 40
+            return
+        fi
+
         search=$(dialog --inputbox "Enter username to search (leave blank to list all):" 8 60 2>&1 >/dev/tty)
         if [ $? -ne 0 ]; then return; fi
 
@@ -357,13 +304,23 @@ edit_existing_user() {
             return
         fi
 
+        uid=$(id -u "$selected_user")
+        gid=$(id -g "$selected_user")
+        groups=$(id -Gn "$selected_user")
+        homedir=$(getent passwd "$selected_user" | cut -d: -f6)
+        email="${user_emails[$selected_user]:-No email}"
+        has_sudo=$(echo "$groups" | grep -qw "sudo" && echo "Yes" || echo "No")
+
+        dialog --msgbox "User Summary for $selected_user:\n\nUsername: $selected_user\nUID: $uid\nGID: $gid\nHome: $homedir\nEmail: $email\nSudo: $has_sudo" 12 60
+
         while true; do
-            EDIT_CHOICE=$(dialog --menu "Edit User: $selected_user\nChoose action:" 15 60 7 \
+            EDIT_CHOICE=$(dialog --menu "Edit User: $selected_user\nChoose action:" 18 60 10 \
                 1 "Reset Password" \
                 2 "Update Email" \
                 3 "Create Home Directory if Missing" \
-                4 "Toggle Root Privileges" \
-                5 "Back to User Search" \
+                4 "Modify Root Privileges" \
+                5 "Remove User Account" \
+                6 "Back to User Search" \
                 3>&1 1>&2 2>&3)
 
             case $EDIT_CHOICE in
@@ -380,14 +337,12 @@ edit_existing_user() {
                     if [ $? -eq 0 ]; then
                         newemail=$(<"$TMPFILE")
                         user_emails["$selected_user"]="$newemail"
-                        # Update the conf file:
                         sudo sed -i "/^$selected_user=/d" "$EMAIL_CONF"
                         echo "$selected_user=$newemail" | sudo tee -a "$EMAIL_CONF" > /dev/null
                         dialog --msgbox "Email updated for $selected_user." 8 50
                     fi
                     ;;
                 3)
-                    homedir=$(getent passwd "$selected_user" | cut -d: -f6)
                     if [ -d "$homedir" ]; then
                         dialog --msgbox "Home directory already exists: $homedir" 8 50
                     else
@@ -399,14 +354,38 @@ edit_existing_user() {
                     ;;
                 4)
                     if id -nG "$selected_user" | grep -qw "sudo"; then
-                        sudo deluser "$selected_user" sudo
-                        dialog --msgbox "Root privileges removed from $selected_user." 8 50
+                        dialog --yesno "User currently HAS root privileges.\n\nDo you want to REMOVE root privileges?" 10 50
+                        if [ $? -eq 0 ]; then
+                            sudo deluser "$selected_user" sudo
+                            dialog --msgbox "Root privileges removed from $selected_user." 8 50
+                        else
+                            dialog --msgbox "No changes made to root privileges." 8 50
+                        fi
                     else
-                        sudo usermod -aG sudo "$selected_user"
-                        dialog --msgbox "Root privileges granted to $selected_user." 8 50
+                        dialog --yesno "User currently does NOT have root privileges.\n\nDo you want to GRANT root privileges?" 10 50
+                        if [ $? -eq 0 ]; then
+                            sudo usermod -aG sudo "$selected_user"
+                            dialog --msgbox "Root privileges granted to $selected_user." 8 50
+                        else
+                            dialog --msgbox "No changes made to root privileges." 8 50
+                        fi
                     fi
                     ;;
                 5)
+                    dialog --yesno "Are you sure you want to REMOVE the user '$selected_user'?\nThis will delete the user and optionally their home directory." 10 60
+                    if [ $? -eq 0 ]; then
+                        dialog --yesno "Do you want to also remove their home directory?" 8 50
+                        if [ $? -eq 0 ]; then
+                            sudo userdel -r "$selected_user"
+                        else
+                            sudo userdel "$selected_user"
+                        fi
+                        sudo sed -i "/^$selected_user=/d" "$EMAIL_CONF"
+                        dialog --msgbox "User $selected_user removed." 8 40
+                        break  # Refresh user list
+                    fi
+                    ;;
+                6)
                     break
                     ;;
                 *)
