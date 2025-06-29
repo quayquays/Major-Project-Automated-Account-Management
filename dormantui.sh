@@ -9,6 +9,10 @@ REPORT_DIR="/dormant_reports"
 TMPFILE=$(mktemp)
 EMAIL_CONF="/etc/user_emails.conf"
 CONFIG_FILE="/etc/dormant.conf"
+TARGET_SCRIPT="/usr/local/bin/dormant.sh"
+
+# Load config at start
+source "$CONFIG_FILE"
 
 main_menu() {
     while true; do
@@ -18,7 +22,7 @@ main_menu() {
             1 "View Dormant Reports" \
             2 "Set Account Expiry" \
             3 "Create User Account" \
-            4 "Update User Email" \
+            4 "Update Email" \
             5 "Update Configuration" \
             6 "Edit Existing User" \
             7 "Exit" \
@@ -207,12 +211,11 @@ update_email() {
 update_config() {
     source "$CONFIG_FILE"
 
-    CHOICE=$(dialog --menu "Which setting do you want to update?" 20 60 12 \
+    CHOICE=$(dialog --menu "Which setting do you want to update?" 20 60 10 \
         1 "User Dormancy (Current: $DORMANT_USERACCOUNT_DURATION days)" \
         2 "Service Dormancy (Current: $DORMANT_SERVICEACCOUNT_DURATION days)" \
         3 "Password Expiry (Current: $DORMANT_PASSWORD_EXPIRY_DURATION days)" \
-        4 "Select from Predefined Cron Schedule (Current: $DORMANT_CRON_SCHEDULE)" \
-        5 "Custom Cron Schedule Input" \
+        4 "Custom Cron Schedule Input (Current: $DORMANT_CRON_SCHEDULE)" \
         3>&1 1>&2 2>&3)
 
     case $CHOICE in
@@ -232,35 +235,22 @@ update_config() {
             dialog --msgbox "Updated password expiry to $NEW days." 6 50
             ;;
         4)
-            TIME=$(dialog --clear --backtitle "Cron Job Scheduler" --menu "Choose a predefined cron schedule:" 15 60 6 \
-                1 "Daily at midnight (0 0 * * *)" \
-                2 "Every hour (0 * * * *)" \
-                3 "Every 15 minutes (*/15 * * * *)" \
-                4 "Every 30 minutes (*/30 * * * *)" \
-                5 "Every 5 minutes (*/5 * * * *)" \
-                6 "Back" \
-                3>&1 1>&2 2>&3)
-
-            case $TIME in
-                1) SCHEDULE="0 0 * * *" ;;
-                2) SCHEDULE="0 * * * *" ;;
-                3) SCHEDULE="*/15 * * * *" ;;
-                4) SCHEDULE="*/30 * * * *" ;;
-                5) SCHEDULE="*/5 * * * *" ;;
-                *) return ;;
-            esac
-
-            sudo sed -i "s/^DORMANT_CRON_SCHEDULE=.*/DORMANT_CRON_SCHEDULE=\"$SCHEDULE\"/" "$CONFIG_FILE"
-            dialog --msgbox "Cron schedule updated to: $SCHEDULE" 6 50
-            ;;
-        5)
-            NEW=$(dialog --inputbox "Enter custom cron schedule (e.g. 0 2 * * *):" 8 60 2>&1 >/dev/tty)
-            sudo sed -i "s/^DORMANT_CRON_SCHEDULE=.*/DORMANT_CRON_SCHEDULE=\"$NEW\"/" "$CONFIG_FILE"
+            NEW=$(dialog --inputbox "Enter custom cron schedule (e.g. */5 * * * *):" 8 60 "$DORMANT_CRON_SCHEDULE" 2>&1 >/dev/tty)
+            # Update config file
+            sudo sed -i "s|^DORMANT_CRON_SCHEDULE=.*|DORMANT_CRON_SCHEDULE=\"$NEW\"|" "$CONFIG_FILE"
             dialog --msgbox "Custom cron schedule set to: $NEW" 6 60
+
+            # Also update the actual crontab
+            (crontab -l 2>/dev/null | grep -v "$TARGET_SCRIPT" ; echo "$NEW bash $TARGET_SCRIPT") | crontab -
+
+            dialog --msgbox "Crontab updated with new schedule." 6 50
             ;;
         *)
             ;;
     esac
+
+    # Reload config variables after update
+    source "$CONFIG_FILE"
 }
 
 edit_existing_user() {
