@@ -41,25 +41,66 @@ main_menu() {
 }
 
 view_reports() {
+    declare -A FILE_MAP
     mapfile -t files < <(ls -t "$REPORT_DIR"/dormant_report_*.txt 2>/dev/null)
     if [ ${#files[@]} -eq 0 ]; then
         dialog --msgbox "No reports found in $REPORT_DIR." 10 40
         return
     fi
 
+    dialog --inputbox "Enter date to search (e.g. 01/01/2025) or leave blank to list all:" 8 60 2> "$TMPFILE"
+    search=$(<"$TMPFILE")
+
     OPTIONS=()
     for file in "${files[@]}"; do
         filename=$(basename "$file")
-        OPTIONS+=("$file" "$filename")
+        rawdate="${filename#dormant_report_}"
+        rawdate="${rawdate%.txt}"
+
+        # Parse filename: 29_Jun_2025_02-22_PM
+        day=$(echo "$rawdate" | cut -d'_' -f1)
+        month_text=$(echo "$rawdate" | cut -d'_' -f2)
+        year=$(echo "$rawdate" | cut -d'_' -f3)
+        time_raw=$(echo "$rawdate" | cut -d'_' -f4-)
+
+        case "$month_text" in
+            Jan) month="01" ;;
+            Feb) month="02" ;;
+            Mar) month="03" ;;
+            Apr) month="04" ;;
+            May) month="05" ;;
+            Jun) month="06" ;;
+            Jul) month="07" ;;
+            Aug) month="08" ;;
+            Sep) month="09" ;;
+            Oct) month="10" ;;
+            Nov) month="11" ;;
+            Dec) month="12" ;;
+            *) month="00" ;;
+        esac
+
+        formatted_date="${day}/${month}/${year}"
+        formatted_time=$(echo "$time_raw" | sed 's/-/:/g')
+        display="${formatted_date} ${formatted_time}"
+
+        if [[ -z "$search" || "$display" == *"$search"* ]]; then
+            OPTIONS+=("$display" "")
+            FILE_MAP["$display"]="$file"
+        fi
     done
 
-    FILE=$(dialog --title "Dormant Reports" \
+    if [ ${#OPTIONS[@]} -eq 0 ]; then
+        dialog --msgbox "No reports match your input." 8 40
+        return
+    fi
+
+    CHOSEN=$(dialog --title "Dormant Reports" \
         --menu "Select a report to view:" 20 70 10 \
         "${OPTIONS[@]}" \
         3>&1 1>&2 2>&3)
 
-    if [ -n "$FILE" ]; then
-        dialog --textbox "$FILE" 25 80
+    if [ -n "$CHOSEN" ]; then
+        dialog --textbox "${FILE_MAP[$CHOSEN]}" 25 80
     fi
 }
 
@@ -236,11 +277,9 @@ update_config() {
             ;;
         4)
             NEW=$(dialog --inputbox "Enter custom cron schedule (e.g. */5 * * * *):" 8 60 "$DORMANT_CRON_SCHEDULE" 2>&1 >/dev/tty)
-            # Update config file
             sudo sed -i "s|^DORMANT_CRON_SCHEDULE=.*|DORMANT_CRON_SCHEDULE=\"$NEW\"|" "$CONFIG_FILE"
             dialog --msgbox "Custom cron schedule set to: $NEW" 6 60
 
-            # Also update the actual crontab
             (crontab -l 2>/dev/null | grep -v "$TARGET_SCRIPT" ; echo "$NEW bash $TARGET_SCRIPT") | crontab -
 
             dialog --msgbox "Crontab updated with new schedule." 6 50
@@ -249,7 +288,6 @@ update_config() {
             ;;
     esac
 
-    # Reload config variables after update
     source "$CONFIG_FILE"
 }
 
@@ -262,7 +300,6 @@ edit_existing_user() {
     fi
 
     while true; do
-        # Refresh user list each loop
         mapfile -t all_users < <(awk -F: '($3>=1000)&&($1!="nobody"){print $1}' /etc/passwd)
 
         if [ ${#all_users[@]} -eq 0 ]; then
@@ -377,24 +414,21 @@ edit_existing_user() {
                         fi
                         sudo sed -i "/^$selected_user=/d" "$EMAIL_CONF"
                         dialog --msgbox "User $selected_user removed." 8 40
-                        break  # Refresh user list
+                        break
                     fi
                     ;;
                 6)
                     break
                     ;;
                 *)
-                    break
                     ;;
             esac
         done
     done
 }
 
-cleanup() {
-    rm -f "$TMPFILE"
-}
-
-trap cleanup EXIT
 
 main_menu
+
+
+rm -f "$TMPFILE"
