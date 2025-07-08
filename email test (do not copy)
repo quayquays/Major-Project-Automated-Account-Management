@@ -967,3 +967,13 @@ def confirm():
     else:
         return "Unknown response."
 
+
+elif response == "no":
+    if user.isalnum():
+        result = os.system(f"usermod --expiredate 1 {user}")
+        with open("/var/log/dormant_deactivations.log", "a") as log:
+            log.write(f"{datetime.datetime.now()}: {user} deactivated. Command exit: {result}\n")
+        return f"❌ Your account has been deactivated. Goodbye, {user}!"
+    else:
+        return "❗ Invalid username format."
+
