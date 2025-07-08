@@ -571,3 +571,24 @@ curl -sSL https://ngrok-agent.s3.amazonaws.com/ngrok.asc \
 
 Set up:
 ngrok config add-authtoken 2zaVISZP5xdArPzQfHDas4ANyUr_6Mrkjgm44njy289aiM3Ri
+
+
+Update server.py:
+@app.route('/keep/<username>', methods=['GET'])
+def keep_account(username):
+    with open('/etc/dormant_opt_in.conf', 'a') as f:
+        f.write(f"{username}\n")
+    return f"✅ Your account will remain active. Thank you, {username}!"
+
+Update dormant.sh:
+OPT_IN_FILE="/etc/dormant_opt_in.conf"
+touch "$OPT_IN_FILE"
+
+for user in $user_account; do
+    # Skip if user opted in
+    if grep -qx "$user" "$OPT_IN_FILE"; then
+        continue
+    fi
+
+    # Existing dormant detection logic here...
+
