@@ -558,3 +558,34 @@ check_user_account
 detect_dormant_user
 check_password_expiry
 generate_report
+
+
+SIMULATION (account 63 days)
+#!/bin/bash
+
+# Number of days to simulate inactivity
+SIMULATED_DAYS=63
+
+# Get all real users with UID >= 1000 (excluding nobody)
+user_list=$(awk -F: '$3 >= 1000 && $1 != "nobody" {print $1}' /etc/passwd)
+
+# Loop through each user and touch their ~/.bash_logout to simulate last login
+for user in $user_list; do
+    HOME_DIR=$(eval echo "~$user")
+    FILE="$HOME_DIR/.bash_logout"
+
+    # Ensure home dir exists
+    if [[ -d "$HOME_DIR" ]]; then
+        sudo touch "$FILE"
+        sudo chown "$user:$user" "$FILE"
+        sudo date -s "$(date -d "$SIMULATED_DAYS days ago" '+%Y-%m-%d %H:%M:%S')" > /dev/null
+        sudo touch -d "$SIMULATED_DAYS days ago" "$FILE"
+        echo "✅ Simulated $SIMULATED_DAYS days inactivity for $user"
+    else
+        echo "⚠️ Home directory not found for $user, skipping..."
+    fi
+done
+
+# Reset system date (IMPORTANT!)
+sudo hwclock -s
+echo "🕓 System time restored. Simulation complete."
