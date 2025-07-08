@@ -580,6 +580,55 @@ def keep_account(username):
         f.write(f"{username}\n")
     return f"✅ Your account will remain active. Thank you, {username}!"
 
+
+
+from flask import Flask
+import os
+import subprocess
+
+app = Flask(__name__)
+OPT_IN_FILE = "/etc/dormant_opt_in.conf"
+DEACTIVATED_LOG = "/var/log/dormant_deactivated_users.log"
+
+@app.route('/keep/<username>', methods=['GET'])
+def keep_account(username):
+    os.makedirs(os.path.dirname(OPT_IN_FILE), exist_ok=True)
+    with open(OPT_IN_FILE, 'a') as f:
+        f.write(f"{username}\n")
+    return f"✅ Your account will remain active. Thank you, {username}!"
+
+@app.route('/deactivate/<username>', methods=['GET'])
+def deactivate_account(username):
+    try:
+        # Deactivate the user account
+        subprocess.run(['usermod', '-L', username], check=True)
+        subprocess.run(['usermod', '-s', '/sbin/nologin', username], check=True)
+
+        # Log the action
+        os.makedirs(os.path.dirname(DEACTIVATED_LOG), exist_ok=True)
+        with open(DEACTIVATED_LOG, 'a') as f:
+            f.write(f"{username} deactivated via email link.\n")
+
+        return f"❌ Your account '{username}' has been deactivated as requested."
+    except Exception as e:
+        return f"⚠️ Failed to deactivate account '{username}': {e}"
+
+@app.route('/')
+def index():
+    return "🛡️ Dormant Account Management Flask Server is running."
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8080)
+
+
+
+
+
+
+
+
+
+
 Update dormant.sh:
 OPT_IN_FILE="/etc/dormant_opt_in.conf"
 touch "$OPT_IN_FILE"
