@@ -625,6 +625,28 @@ if __name__ == '__main__':
 
 
 
+from flask import Flask
+import os
+import datetime
+
+app = Flask(__name__)
+OPT_IN_FILE = "/etc/dormant_opt_in.conf"
+
+@app.route('/keep/<username>', methods=['GET'])
+def keep_account(username):
+    os.makedirs(os.path.dirname(OPT_IN_FILE), exist_ok=True)
+    now = datetime.datetime.now().strftime("%Y-%m-%d")
+    with open(OPT_IN_FILE, 'a') as f:
+        f.write(f"{username}={now}\n")
+    return f"✅ Your account will remain active. Thank you, {username}!"
+
+
+
+
+
+
+
+
 
 
 
@@ -640,4 +662,27 @@ for user in $user_account; do
     fi
 
     # Existing dormant detection logic here...
+
+
+
+
+
+
+
+
+
+if grep -q "^$user=" "$OPT_IN_FILE"; then
+    optin_date=$(grep "^$user=" "$OPT_IN_FILE" | cut -d= -f2)
+    optin_ts=$(date -d "$optin_date" +%s 2>/dev/null)
+    today_ts=$(date +%s)
+    days_since_optin=$(( (today_ts - optin_ts) / 86400 ))
+
+    # If they opted in less than 70 days ago, skip them
+    if [ "$days_since_optin" -lt "$DORMANT_USERACCOUNT_DURATION" ]; then
+        continue
+    fi
+fi
+
+
+
 
