@@ -885,3 +885,16 @@ check_password_expiry
 generate_report
 
 
+
+@app.route('/confirm')
+def confirm():
+    user = request.args.get('user')
+    response = request.args.get('response')
+
+    if response == "yes":
+        now = datetime.datetime.now().strftime("%Y-%m-%d")
+        with open("/etc/dormant_opt_in.conf", "a") as f:
+            f.write(f"{user}={now}\n")
+        return f"✅ Your account will remain active. Thank you, {user}!"
+
+
