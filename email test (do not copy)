@@ -977,3 +977,26 @@ elif response == "no":
     else:
         return "❗ Invalid username format."
 
+
+
+
+
+
+
+MODIFIED:
+server.py:
+elif response == "no":
+    if user.isalnum():
+        result = os.system(f"usermod --expiredate 1 {user}")
+        with open("/var/log/dormant_deactivations.log", "a") as f:
+            f.write(f"{datetime.datetime.now()}: Tried to deactivate {user}, result={result}\n")
+        return f"❌ Your account has been deactivated. Goodbye, {user}!"
+    else:
+        return "❗ Invalid username format."
+
+dormant.sh:
+account_expiry=$(chage -l "$user" | grep "Account expires" | awk -F: '{print $2}' | xargs)
+if [[ "$account_expiry" == "Jan 01, 1970" ]]; then
+    continue  # Skip already expired accounts
+fi
+
