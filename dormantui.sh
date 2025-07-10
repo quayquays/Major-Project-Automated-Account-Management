@@ -1,45 +1,46 @@
 #!/bin/bash
 
-if [[ $EUID -ne 0 ]]; then
-    echo "This script must be run as root or with sudo."
-    exit 1
-fi
+# Paths and temp files
+TMPFILE="/tmp/dormant_ui_tmp.$$"
+REPORT_DIR="/dormant_reports"          # Set your actual report directory here
+EMAIL_CONF="/etc/user_emails.conf"       # Set your email config file path here
+CONFIG_FILE="/etc/dormant.conf"       # Your config file with dormancy variables
+TARGET_SCRIPT="/usr/local/bin/dormant.sh" # Your main script that cron calls
 
-REPORT_DIR="/dormant_reports"
-TMPFILE=$(mktemp)
-EMAIL_CONF="/etc/user_emails.conf"
-CONFIG_FILE="/etc/dormant.conf"
-TARGET_SCRIPT="/usr/local/bin/dormant.sh"
-
-# Load config at start
-source "$CONFIG_FILE"
-
+# -------- main menu --------
 main_menu() {
     while true; do
         CHOICE=$(dialog --clear --backtitle "Dormant User Management UI" \
             --title "Main Menu" \
-            --menu "Choose an option:" 20 60 9 \
-            1 "View Dormant Reports" \
-            2 "Set Account Expiry" \
-            3 "Create User Account" \
-            4 "Update Email" \
-            5 "Update Configuration" \
-            6 "Edit Existing User" \
+            --menu "Select an option:" 25 60 15 \
+            "*" "USER MANAGEMENT" \
+            1 "Create User Account" \
+            2 "Update Email Address" \
+            3 "Edit User Information" \
+            "*" "SYSTEM CONFIGURATION" \
+            4 "Update System Configuration" \
+            "*" "REPORTS" \
+            5 "View Dormant Reports" \
+            "*" "ACCOUNT EXPIRY" \
+            6 "Set Account Expiry" \
             7 "Exit" \
             3>&1 1>&2 2>&3)
 
         case $CHOICE in
-            1) view_reports ;;
-            2) set_expiry ;;
-            3) create_user ;;
-            4) update_email ;;
-            5) update_config ;;
-            6) edit_existing_user ;;
+            1) create_user ;;
+            2) update_email ;;
+            3) edit_existing_user ;;
+            4) update_config ;;
+            5) view_reports ;;
+            6) set_expiry ;;
             7) clear; break ;;
+            H1|H2|H3|H4) ;;  # ignore headings
+            *) ;;            # ignore unknown choices
         esac
     done
 }
 
+# -------- view reports --------
 view_reports() {
     declare -A FILE_MAP
     mapfile -t files < <(ls -t "$REPORT_DIR"/dormant_report_*.txt 2>/dev/null)
@@ -57,7 +58,6 @@ view_reports() {
         rawdate="${filename#dormant_report_}"
         rawdate="${rawdate%.txt}"
 
-        # Parse filename: 29_Jun_2025_02-22_PM
         day=$(echo "$rawdate" | cut -d'_' -f1)
         month_text=$(echo "$rawdate" | cut -d'_' -f2)
         year=$(echo "$rawdate" | cut -d'_' -f3)
@@ -104,6 +104,7 @@ view_reports() {
     fi
 }
 
+# -------- set account expiry --------
 set_expiry() {
     dialog --inputbox "Enter username:" 8 40 2> "$TMPFILE"
     username=$(<"$TMPFILE")
@@ -124,6 +125,7 @@ set_expiry() {
     fi
 }
 
+# -------- create user --------
 create_user() {
     step=1
     newuser=""
@@ -136,7 +138,7 @@ create_user() {
         case $step in
             1)
                 dialog --cancel-label "Back to Menu" --ok-label "Next" \
-                       --inputbox "Enter new username:" 8 40 2> "$TMPFILE"
+                    --inputbox "Enter new username:" 8 40 2> "$TMPFILE"
                 result=$?
                 if [[ $result -ne 0 ]]; then return; fi
                 newuser=$(<"$TMPFILE")
@@ -149,25 +151,25 @@ create_user() {
                 ;;
             2)
                 dialog --cancel-label "Back" --ok-label "Next" \
-                       --inputbox "Enter email for $newuser:" 8 60 2> "$TMPFILE"
+                    --inputbox "Enter email for $newuser:" 8 60 2> "$TMPFILE"
                 result=$?
-                if [[ $result -eq 1 ]]; then step=1; continue; fi
+                if [[ $result -ne 0 ]]; then step=1; continue; fi
                 useremail=$(<"$TMPFILE")
                 step=3
                 ;;
             3)
                 dialog --cancel-label "Back" --ok-label "Next" \
-                       --insecure --passwordbox "Enter password for $newuser:" 8 40 2> "$TMPFILE"
+                    --insecure --passwordbox "Enter password for $newuser:" 8 40 2> "$TMPFILE"
                 result=$?
-                if [[ $result -eq 1 ]]; then step=2; continue; fi
+                if [[ $result -ne 0 ]]; then step=2; continue; fi
                 password=$(<"$TMPFILE")
                 step=4
                 ;;
             4)
                 dialog --cancel-label "Back" --ok-label "Next" \
-                       --insecure --passwordbox "Confirm password for $newuser:" 8 40 2> "$TMPFILE"
+                    --insecure --passwordbox "Confirm password for $newuser:" 8 40 2> "$TMPFILE"
                 result=$?
-                if [[ $result -eq 1 ]]; then step=3; continue; fi
+                if [[ $result -ne 0 ]]; then step=3; continue; fi
                 password_confirm=$(<"$TMPFILE")
 
                 if [[ "$password" != "$password_confirm" ]]; then
@@ -179,7 +181,7 @@ create_user() {
                 ;;
             5)
                 dialog --cancel-label "Back" --yes-label "Yes" --no-label "No" \
-                       --yesno "Should $newuser have root privileges?" 7 50
+                    --yesno "Should $newuser have root privileges?" 7 50
                 result=$?
                 case $result in
                     0) sudo_answer="Yes"; step=6 ;;
@@ -189,7 +191,8 @@ create_user() {
                 ;;
             6)
                 homedir="/home/$newuser"
-                dialog --yes-label "Confirm" --no-label "Back" --yesno "Please confirm the user details:\n\nUsername: $newuser\nEmail: $useremail\nHome: $homedir\nRoot Privileges: $sudo_answer\n\nProceed?" 16 60
+                dialog --yes-label "Confirm" --no-label "Back" \
+                    --yesno "Please confirm the user details:\n\nUsername: $newuser\nEmail: $useremail\nHome: $homedir\nRoot Privileges: $sudo_answer\n\nProceed?" 16 60
                 result=$?
                 if [[ $result -eq 0 ]]; then
                     sudo useradd -m "$newuser" || {
@@ -218,6 +221,7 @@ create_user() {
     done
 }
 
+# -------- update email --------
 update_email() {
     if [ ! -f "$EMAIL_CONF" ]; then
         dialog --msgbox "Email config file not found at $EMAIL_CONF." 8 50
@@ -249,7 +253,13 @@ update_email() {
     dialog --msgbox "Email for $selected_user updated successfully." 8 50
 }
 
+# -------- update config --------
 update_config() {
+    if [ ! -f "$CONFIG_FILE" ]; then
+        dialog --msgbox "Config file not found: $CONFIG_FILE" 8 50
+        return
+    fi
+
     source "$CONFIG_FILE"
 
     CHOICE=$(dialog --menu "Which setting do you want to update?" 20 60 10 \
@@ -280,6 +290,7 @@ update_config() {
             sudo sed -i "s|^DORMANT_CRON_SCHEDULE=.*|DORMANT_CRON_SCHEDULE=\"$NEW\"|" "$CONFIG_FILE"
             dialog --msgbox "Custom cron schedule set to: $NEW" 6 60
 
+            # Update crontab: remove old and add new for TARGET_SCRIPT
             (crontab -l 2>/dev/null | grep -v "$TARGET_SCRIPT" ; echo "$NEW bash $TARGET_SCRIPT") | crontab -
 
             dialog --msgbox "Crontab updated with new schedule." 6 50
@@ -291,6 +302,7 @@ update_config() {
     source "$CONFIG_FILE"
 }
 
+# -------- edit existing user --------
 edit_existing_user() {
     declare -A user_emails
     if [ -f "$EMAIL_CONF" ]; then
@@ -427,8 +439,8 @@ edit_existing_user() {
     done
 }
 
-
+# ---- main execution ----
 main_menu
 
-
+# cleanup
 rm -f "$TMPFILE"
