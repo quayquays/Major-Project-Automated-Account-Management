@@ -54,11 +54,32 @@ Thanks Yu Xuan for the detailed step I just copy pasted 🥹🥰
 3. ngrok http 8080
 4. A ngrok session will be shown
 5. Copy the link at the "Forwarding" section (eg. "https://cc87d8decd23.ngrok-free.app")
+6. Edit dormant.sh accordingly with updated script 
+7. In dormant.sh, change your server-url to the forwarding link
+
+Another way to do it is:
+
+#### Through the UI.
+Just make sure you do steps one and two before you do this.
+
+1) Run dormantui.sh
+2) Go to system configurations --> Generate ngrock URL
+- This will open a new terminal [ DONT CLOSE IT ]
+- And it will automatically update it in the script for you.
+
+But if you did till steps 5 you can also manually update it, through the UI.
+
+1) Go to system and configuration --> Manual Update URL [ I think i forgot ]
 
 
 ### 4. Run dormantui.sh.
+There are several things you can do in this UI. 
 
-Make sure to update your credentials under system configuration and generate a 
+
+- Set up your gmail credentials [ For the SMTP ] ⚠️✨
+- Set up your ngrock
+- I will continue to write more tommorow 
+- 
 
 
     
