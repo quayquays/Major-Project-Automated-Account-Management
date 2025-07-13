@@ -68,7 +68,7 @@ system_configuration_menu() {
 
         case $CHOICE in
             1) update_config ;;
-            2) update_gmail_credentials_ui_combined ;;
+            2) update_gmail_credentials_ui ;;
             3) update_server_url_ui ;;
             4) generate_new_ngrok_url ;;
             5) break ;;
@@ -645,46 +645,57 @@ generate_new_ngrok_url() {
 
    
 # -------- Update Gmail Credentials UI (Combined Email & App Password) --------
-update_gmail_credentials_ui_combined() {
-    # Extract current email and password from sendemail line
+update_gmail_credentials_ui() {
+    # Extract current values
     current_email=$(grep -Po '(?<=-xu )[^ ]+' "$TARGET_SCRIPT" | head -1)
     current_password=$(grep -Po '(?<=-xp ")[^"]+' "$TARGET_SCRIPT" | head -1)
     current_from=$(grep -Po '(?<=-f )[^ ]+' "$TARGET_SCRIPT" | head -1)
 
-    dialog --form "Update Gmail Credentials" 12 60 3 \
-        "Gmail Email:" 1 1 "$current_email" 1 15 40 0 \
-        "App Password:" 2 1 "" 2 15 40 1 \
-        "From Email:" 3 1 "$current_from" 3 15 40 0 2> "$TMPFILE"
+    # Menu: what to update
+    CHOICE=$(dialog --menu "Current Gmail Credentials:\n\nFrom Email: $current_from\nLogin Email: $current_email\nApp Password: $current_password\n\nChoose what to update:" 16 60 4 \
+        1 "Update From Email (-f)" \
+        2 "Update Login Email (-xu)" \
+        3 "Update App Password (-xp)" \
+        4 "Cancel" \
+        3>&1 1>&2 2>&3)
 
-    if [ $? -ne 0 ]; then
-        dialog --msgbox "Update cancelled." 6 40
-        return
-    fi
+    case $CHOICE in
+        1)
+            dialog --inputbox "Enter new From Email (-f):" 8 60 "$current_from" 2> "$TMPFILE"
+            new_from=$(<"$TMPFILE")
+            [[ -z "$new_from" ]] && { dialog --msgbox "From Email cannot be empty." 6 40; return; }
+            current_from="$new_from"
+            ;;
+        2)
+            dialog --inputbox "Enter new Login Email (-xu):" 8 60 "$current_email" 2> "$TMPFILE"
+            new_email=$(<"$TMPFILE")
+            [[ -z "$new_email" ]] && { dialog --msgbox "Login Email cannot be empty." 6 40; return; }
+            current_email="$new_email"
+            ;;
+        3)
+            dialog --inputbox "Enter new App Password (-xp):" 8 60 "$current_password" 2> "$TMPFILE"
+            new_password=$(<"$TMPFILE")
+            [[ -z "$new_password" ]] && { dialog --msgbox "App Password cannot be empty." 6 40; return; }
+            current_password="$new_password"
+            ;;
+        4|*) return ;;
+    esac
 
-    new_email=$(sed -n 1p "$TMPFILE")
-    new_password=$(sed -n 2p "$TMPFILE")
-    new_from=$(sed -n 3p "$TMPFILE")
+    # Confirm final changes
+    dialog --yesno "Confirm updated Gmail credentials:\n\nFrom Email: $current_from\nLogin Email: $current_email\nApp Password: $current_password" 10 60
+    [[ $? -ne 0 ]] && { dialog --msgbox "Update cancelled." 6 40; return; }
 
-    if [[ -z "$new_email" || -z "$new_password" || -z "$new_from" ]]; then
-        dialog --msgbox "All fields must be filled. Update cancelled." 6 50
-        return
-    fi
+    # Do all three replacements
+    sudo sed -i -r "s|(-f )[^ ]+|\1$current_from|" "$TARGET_SCRIPT"
+    sudo sed -i -r "s|(-xu )[^ ]+|\1$current_email|" "$TARGET_SCRIPT"
+    sudo sed -i -r "s|(-xp )\"[^\"]+\"|\1\"$current_password\"|" "$TARGET_SCRIPT"
 
-    dialog --yesno "Confirm update:\n\nFrom Email: $new_from\nLogin Email: $new_email\nApp Password: (hidden)" 10 50
-    if [ $? -ne 0 ]; then
-        dialog --msgbox "Update cancelled." 6 40
-        return
-    fi
-
-    # Update -f, -xu, and -xp individually in the script
-    sudo sed -i -r "s|(-f )[^ ]+|\1$new_from|" "$TARGET_SCRIPT"
-    sudo sed -i -r "s|(-xu )[^ ]+|\1$new_email|" "$TARGET_SCRIPT"
-    sudo sed -i -r "s|(-xp \")[^\"]+|\\1$new_password|" "$TARGET_SCRIPT"
-
-    updated_line=$(grep 'sendemail ' "$TARGET_SCRIPT" | sed -E 's/-xp "[^"]+"/-xp "(hidden)"/')
-
-    dialog --msgbox "Gmail credentials updated.\n\nUpdated command:\n$updated_line" 10 70
+    # Show full updated line (with -f included)
+    updated_line=$(grep -P 'sendemail.*-f .* -xu .* -xp ' "$TARGET_SCRIPT")
+    dialog --msgbox "Gmail credentials updated successfully.\n\n$updated_line" 12 70
 }
+
+
 
 # ------------- Start script -------------
 main_menu
