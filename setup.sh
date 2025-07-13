@@ -2,6 +2,8 @@
 
 CONFIG_FILE="/etc/dormant.conf"
 USER_EMAIL_FILE="/etc/user_emails.conf"
+GMAIL_CONFIG_FILE="/etc/gmail.conf"
+
 SCRIPT_NAME="dormant.sh"
 SERVER_SCRIPT_NAME="server.py"
 TARGET_PATH="/usr/local/bin/$SCRIPT_NAME"
@@ -54,6 +56,7 @@ install_if_missing "sendemail"
 install_if_missing "libio-socket-ssl-perl"
 install_if_missing "python3-pip"
 install_if_missing "python3-flask"
+install_if_missing "dbus-x11"  # ✅ Fix for gnome-terminal GUI launch
 
 echo ""
 echo "----------------------------------------"
@@ -82,6 +85,21 @@ if [[ ! -f "$USER_EMAIL_FILE" ]]; then
     echo "Created email mapping: $USER_EMAIL_FILE"
 else
     echo "$USER_EMAIL_FILE already exists. Skipping creation."
+fi
+
+# Gmail credentials config
+if [[ ! -f "$GMAIL_CONFIG_FILE" ]]; then
+    cat <<EOL | sudo tee "$GMAIL_CONFIG_FILE" > /dev/null
+# Gmail SMTP credentials for sending alerts
+
+FROM_EMAIL=youremail@gmail.com
+LOGIN_EMAIL=youremail@gmail.com
+APP_PASSWORD=your_app_password
+EOL
+    sudo chmod 600 "$GMAIL_CONFIG_FILE"
+    echo "Created Gmail config: $GMAIL_CONFIG_FILE"
+else
+    echo "$GMAIL_CONFIG_FILE already exists. Skipping creation."
 fi
 
 echo ""
@@ -165,6 +183,7 @@ echo "INSTALLATION SUMMARY"
 echo "----------------------------------------"
 echo "Config file        : $CONFIG_FILE"
 echo "User emails file   : $USER_EMAIL_FILE"
+echo "Gmail config file  : $GMAIL_CONFIG_FILE"
 echo "Dormant script     : $TARGET_PATH"
 echo "Server script      : $SERVER_TARGET"
 echo "Cron schedule      : $DORMANT_CRON_SCHEDULE"
