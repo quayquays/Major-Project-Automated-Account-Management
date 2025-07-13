@@ -613,89 +613,90 @@ update_server_url_ui() {
 
 # -------- generate new ngrok URL and update --------
 generate_new_ngrok_url() {
-    # Kill existing ngrok if running
+    # Kill existing ngrok processes to avoid conflict
     pkill ngrok 2>/dev/null
 
-    # Start ngrok in background, forward port 80, log to tmp file
-    ngrok http 80 --log=stdout > /tmp/ngrok.log 2>&1 &
-    NGROK_PID=$!
+    # Open new terminal and run ngrok
+    gnome-terminal -- bash -c "ngrok http 8080; exec bash" &
 
-    # Wait few seconds for ngrok to start
+    # Wait for ngrok to initialize
     sleep 5
 
-    # Get forwarding URL from ngrok API or log file
-    # The ngrok web interface API is usually at http://127.0.0.1:4040/api/tunnels
-    forwarding_url=$(curl --silent http://127.0.0.1:4040/api/tunnels | grep -Po '"public_url":"https://[^"]+' | head -1 | cut -d':' -f2- | tr -d '"')
-
-    # Kill ngrok process after getting URL
-    kill "$NGROK_PID"
+    # Fetch forwarding URL from ngrok API
+    forwarding_url=$(curl --silent http://127.0.0.1:4040/api/tunnels | \
+        grep -Po '"public_url":"https://[^"]+' | head -1 | cut -d':' -f2- | tr -d '"')
 
     if [[ -z "$forwarding_url" ]]; then
-        dialog --msgbox "Failed to get ngrok forwarding URL." 6 50
-        return
+        dialog --msgbox "Failed to get ngrok URL. Make sure ngrok is running." 6 50
+        return 1
     fi
 
-    # Update script server_url line
+    # Update your dormant.sh or config with the new URL
     sudo sed -i -r "s|^\s*local server_url=.*|    local server_url=\"$forwarding_url\"  # updated URL |" "$TARGET_SCRIPT"
 
-    # Show confirmation
-    dialog --msgbox "Generated new ngrok URL:\n$forwarding_url\n\nUpdated script line:\n$(grep -P '^\s*local server_url=' "$TARGET_SCRIPT")" 12 70
+    dialog --msgbox "New ngrok URL generated:\n$forwarding_url\n\nNgrok running in new terminal." 10 70
 }
 
 
    
-# -------- Update Gmail Credentials UI (Combined Email & App Password) --------
+# -------- Update Gmail Cedentials UI (Combined Email & App Password) --------
 update_gmail_credentials_ui() {
-    # Extract current values
-    current_email=$(grep -Po '(?<=-xu )[^ ]+' "$TARGET_SCRIPT" | head -1)
-    current_password=$(grep -Po '(?<=-xp ")[^"]+' "$TARGET_SCRIPT" | head -1)
-    current_from=$(grep -Po '(?<=-f )[^ ]+' "$TARGET_SCRIPT" | head -1)
+    local GMAIL_CONF="/etc/gmail.conf"
+    local TMPFILE=$(mktemp)
 
-    # Menu: what to update
-    CHOICE=$(dialog --menu "Current Gmail Credentials:\n\nFrom Email: $current_from\nLogin Email: $current_email\nApp Password: $current_password\n\nChoose what to update:" 16 60 4 \
-        1 "Update From Email (-f)" \
-        2 "Update Login Email (-xu)" \
-        3 "Update App Password (-xp)" \
-        4 "Cancel" \
-        3>&1 1>&2 2>&3)
+    # Load current values or set defaults
+    local current_from=""
+    local current_login=""
+    local current_password=""
 
-    case $CHOICE in
-        1)
-            dialog --inputbox "Enter new From Email (-f):" 8 60 "$current_from" 2> "$TMPFILE"
-            new_from=$(<"$TMPFILE")
-            [[ -z "$new_from" ]] && { dialog --msgbox "From Email cannot be empty." 6 40; return; }
-            current_from="$new_from"
-            ;;
-        2)
-            dialog --inputbox "Enter new Login Email (-xu):" 8 60 "$current_email" 2> "$TMPFILE"
-            new_email=$(<"$TMPFILE")
-            [[ -z "$new_email" ]] && { dialog --msgbox "Login Email cannot be empty." 6 40; return; }
-            current_email="$new_email"
-            ;;
-        3)
-            dialog --inputbox "Enter new App Password (-xp):" 8 60 "$current_password" 2> "$TMPFILE"
-            new_password=$(<"$TMPFILE")
-            [[ -z "$new_password" ]] && { dialog --msgbox "App Password cannot be empty." 6 40; return; }
-            current_password="$new_password"
-            ;;
-        4|*) return ;;
-    esac
+    if [[ -f "$GMAIL_CONF" ]]; then
+        source "$GMAIL_CONF"
+        current_from=${FROM_EMAIL:-""}
+        current_login=${LOGIN_EMAIL:-""}
+        current_password=${APP_PASSWORD:-""}
+    fi
 
-    # Confirm final changes
-    dialog --yesno "Confirm updated Gmail credentials:\n\nFrom Email: $current_from\nLogin Email: $current_email\nApp Password: $current_password" 10 60
-    [[ $? -ne 0 ]] && { dialog --msgbox "Update cancelled." 6 40; return; }
+    # Show current config summary
+    dialog --msgbox "Current Gmail Credentials:\n\nFrom Email: $current_from\nLogin Email: $current_login\nApp Password: $current_password" 12 60
 
-    # Do all three replacements
-    sudo sed -i -r "s|(-f )[^ ]+|\1$current_from|" "$TARGET_SCRIPT"
-    sudo sed -i -r "s|(-xu )[^ ]+|\1$current_email|" "$TARGET_SCRIPT"
-    sudo sed -i -r "s|(-xp )\"[^\"]+\"|\1\"$current_password\"|" "$TARGET_SCRIPT"
+    # Update From Email
+    dialog --inputbox "Enter From Email (-f):" 8 60 "$current_from" 2> "$TMPFILE"
+    local new_from=$(<"$TMPFILE")
+    [[ -z "$new_from" ]] && { dialog --msgbox "From Email cannot be empty. Update cancelled." 6 50; rm -f "$TMPFILE"; return 1; }
 
-    # Show full updated line (with -f included)
-    updated_line=$(grep -P 'sendemail.*-f .* -xu .* -xp ' "$TARGET_SCRIPT")
-    dialog --msgbox "Gmail credentials updated successfully.\n\n$updated_line" 12 70
+    # Update Login Email
+    dialog --inputbox "Enter Login Email (-xu):" 8 60 "$current_login" 2> "$TMPFILE"
+    local new_login=$(<"$TMPFILE")
+    [[ -z "$new_login" ]] && { dialog --msgbox "Login Email cannot be empty. Update cancelled." 6 50; rm -f "$TMPFILE"; return 1; }
+
+    # Update App Password (plain input, no masking)
+    dialog --inputbox "Enter App Password (-xp):" 8 60 "$current_password" 2> "$TMPFILE"
+    local new_password=$(<"$TMPFILE")
+    [[ -z "$new_password" ]] && { dialog --msgbox "App Password cannot be empty. Update cancelled." 6 50; rm -f "$TMPFILE"; return 1; }
+
+    # Confirm updates with visible password
+    dialog --yesno "Confirm update Gmail credentials?\n\nFrom Email: $new_from\nLogin Email: $new_login\nApp Password: $new_password" 10 60
+    if [[ $? -ne 0 ]]; then
+        dialog --msgbox "Update cancelled." 6 40
+        rm -f "$TMPFILE"
+        return 1
+    fi
+
+    # Write new config securely
+    sudo bash -c "cat > $GMAIL_CONF" <<EOL
+# Gmail SMTP credentials for sending alerts
+FROM_EMAIL=$new_from
+LOGIN_EMAIL=$new_login
+APP_PASSWORD=$new_password
+EOL
+
+    sudo chmod 600 "$GMAIL_CONF"
+    sudo chown root:root "$GMAIL_CONF"
+
+    dialog --msgbox "Gmail credentials updated successfully in $GMAIL_CONF." 6 50
+    rm -f "$TMPFILE"
+    return 0
 }
-
-
 
 # ------------- Start script -------------
 main_menu
