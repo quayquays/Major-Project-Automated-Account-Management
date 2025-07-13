@@ -26,8 +26,14 @@ After fixing it, run the setup.sh again and make sure everything is installed.
 ### 3. Check if everything is installed properly.
 
 - Check if server.py runs in the background
+
+  
 sudo systemctl daemon-reload
+
+
 sudo systemctl restart serverpy.service
+
+
 sudo systemctl status serverpy.service
 
 If it gives errors try to kill the proccess:
@@ -38,7 +44,9 @@ sudo kill -9 <id>
 
 
  - Check for the log files
+   
  cat /var/log/dormant.log
+ 
  cat /var/log/server.log
 
   - Check if dormant.sh is automatically installed in the cronjob.
