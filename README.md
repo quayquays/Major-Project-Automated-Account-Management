@@ -23,6 +23,9 @@ Usually, from the output you can see on how to fix those issues.
 After fixing it, run the setup.sh again and make sure everything is installed.
 
 
+
+
+
 ### 3. Check if everything is installed properly.
 
 - Check if server.py runs in the background
