@@ -58,7 +58,7 @@ sudo kill -9 <id>
 
 ### 4. Set up Ngrock account.
 
-Thanks Yu Xuan for the detailed step I just copy pasted 🥹🥰
+Thanks Yu Xuan for the detailed steps, I just copy paste 🥹🥰
 
 1. Go to ngrok's website and create an account
 2. Go to "Setup & Installation" -> "Linux" -> "Apt" -> Follow the steps given (stop before "Deploy your app online")
@@ -68,7 +68,7 @@ Thanks Yu Xuan for the detailed step I just copy pasted 🥹🥰
 6. Edit dormant.sh accordingly with updated script 
 7. In dormant.sh, change your server-url to the forwarding link
 
-Another way to do it is:
+Another way to do is:
 
 #### Through the UI.
 Just make sure you do steps one and two before you do this.
