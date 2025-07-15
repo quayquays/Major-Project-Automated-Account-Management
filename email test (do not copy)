@@ -1054,3 +1054,13 @@ def index():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
+
+
+for user in $user_account; do
+    # Skip locked accounts
+    if passwd -S "$user" 2>/dev/null | grep -q " L "; then
+        continue
+    fi
+
+    # ...rest of your login check logic...
+
