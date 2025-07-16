@@ -1,5 +1,3 @@
-#THIS INCLUDE THE GMAIL 
-
 #!/bin/bash
 
 # Load configuration
@@ -35,17 +33,17 @@ send_email_to_user() {
     local server_url="http://ngrok_url"  # Replace with actual ngrok/public IP
 
     local confirm_url="${server_url}/confirm?user=${user}&response=yes"
-    local deny_url="${server_url}/confirm?user=${user}&response=no"
+    local deny_url="${server_url}/deactivate/${user}?response=no"  # New "No" URL for deactivation
 
     local subject="⚠️ Your account will be deactivated in 7 days"
     local body="Hi $user,\n\nOur records show your account has been inactive for $days_inactive days.\n\nYour account will be deactivated in 7 days if no action is taken.\n\nWould you like to keep your account?\n\nYES: $confirm_url\nNO: $deny_url\n\nThank you."
 
-    sendemail -f "$FROM_EMAIL" \
+    sendemail -f "$from_email" \
               -t "$email" \
               -u "$subject" \
               -m "$body" \
               -s smtp.gmail.com:587 \
-              -o tls=yes -xu "$LOGIN_EMAIL" -xp "$APP_PASSWORD"
+              -o tls=yes -xu "$login_email" -xp "$app_password"
 }
 
 # Validate config values
