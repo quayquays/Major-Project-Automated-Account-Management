@@ -651,9 +651,9 @@ update_gmail_credentials_ui() {
 
     if [[ -f "$GMAIL_CONF" ]]; then
         source "$GMAIL_CONF"
-        current_from=${FROM_EMAIL:-""}
-        current_login=${LOGIN_EMAIL:-""}
-        current_password=${APP_PASSWORD:-""}
+        current_from=${from_email:-""}
+        current_login=${login_email:-""}
+        current_password=${app_password:-""}
     fi
 
     # Show current config summary
@@ -682,12 +682,12 @@ update_gmail_credentials_ui() {
         return 1
     fi
 
-    # Write new config securely
+    # Write new config securely with lowercase variable names
     sudo bash -c "cat > $GMAIL_CONF" <<EOL
 # Gmail SMTP credentials for sending alerts
-FROM_EMAIL=$new_from
-LOGIN_EMAIL=$new_login
-APP_PASSWORD=$new_password
+from_email=$new_from
+login_email=$new_login
+app_password=$new_password
 EOL
 
     sudo chmod 600 "$GMAIL_CONF"
@@ -697,6 +697,7 @@ EOL
     rm -f "$TMPFILE"
     return 0
 }
+
 
 # ------------- Start script -------------
 main_menu
