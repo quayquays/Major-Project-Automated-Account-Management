@@ -87,14 +87,14 @@ else
     echo "$USER_EMAIL_FILE already exists. Skipping creation."
 fi
 
-# Gmail credentials config
+# Gmail credentials config (lowercase variables)
 if [[ ! -f "$GMAIL_CONFIG_FILE" ]]; then
     cat <<EOL | sudo tee "$GMAIL_CONFIG_FILE" > /dev/null
 # Gmail SMTP credentials for sending alerts
 
-FROM_EMAIL=youremail@gmail.com
-LOGIN_EMAIL=youremail@gmail.com
-APP_PASSWORD=your_app_password
+from_email=youremail@gmail.com
+login_email=youremail@gmail.com
+app_password=your_app_password
 EOL
     sudo chmod 600 "$GMAIL_CONFIG_FILE"
     echo "Created Gmail config: $GMAIL_CONFIG_FILE"
