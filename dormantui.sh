@@ -463,6 +463,10 @@ edit_existing_user() {
         done < "$EMAIL_CONF"
     fi
 
+    # Define log file path
+    LOGFILE="/var/log/user_edit.log"
+    TMPFILE="/tmp/user_edit_tmp.$$"
+
     while true; do
         mapfile -t all_users < <(awk -F: '($3>=1000)&&($1!="nobody"){print $1}' /etc/passwd)
 
@@ -507,16 +511,27 @@ edit_existing_user() {
         email="${user_emails[$selected_user]:-No email}"
         has_sudo=$(echo "$groups" | grep -qw "sudo" && echo "Yes" || echo "No")
 
-        dialog --msgbox "User Summary for $selected_user:\n\nUsername: $selected_user\nUID: $uid\nGID: $gid\nHome: $homedir\nEmail: $email\nSudo: $has_sudo" 12 60
+        # Check if user is locked (deactivated)
+        passwd_status=$(sudo passwd -S "$selected_user" 2>/dev/null)
+        if echo "$passwd_status" | grep -q " L "; then
+            active_status="Deactivated (Locked)"
+            is_deactivated=true
+        else
+            active_status="Activated"
+            is_deactivated=false
+        fi
+
+        dialog --msgbox "User Summary for $selected_user:\n\nUsername: $selected_user\nUID: $uid\nGID: $gid\nHome: $homedir\nEmail: $email\nSudo: $has_sudo\nStatus: $active_status" 14 60
 
         while true; do
-            EDIT_CHOICE=$(dialog --menu "Edit User: $selected_user\nChoose action:" 18 60 10 \
+            EDIT_CHOICE=$(dialog --menu "Edit User: $selected_user\nChoose action:" 18 60 12 \
                 1 "Reset Password" \
                 2 "Update Email" \
                 3 "Create Home Directory if Missing" \
                 4 "Modify Root Privileges" \
                 5 "Remove User Account" \
-                6 "Back to User Search" \
+                6 "Activate / Deactivate User" \
+                7 "Back to User Search" \
                 3>&1 1>&2 2>&3)
 
             case $EDIT_CHOICE in
@@ -569,16 +584,56 @@ edit_existing_user() {
                     if [ $? -eq 0 ]; then
                         sudo userdel -r "$selected_user"
                         sudo sed -i "/^$selected_user=/d" "$EMAIL_CONF"
+                        echo "$(date '+%Y-%m-%d %H:%M:%S') User $selected_user removed" | sudo tee -a "$LOGFILE" > /dev/null
                         dialog --msgbox "User $selected_user removed." 8 50
                         break
                     fi
                     ;;
-                6) break ;;
+                6)
+                    if [ "$is_deactivated" = true ]; then
+                        dialog --yesno "User $selected_user is currently deactivated.\nDo you want to reactivate this user?" 8 60
+                        if [ $? -eq 0 ]; then
+                            sudo passwd -u "$selected_user"
+                            echo "$(date '+%Y-%m-%d %H:%M:%S') User $selected_user reactivated" | sudo tee -a "$LOGFILE" > /dev/null
+                            dialog --msgbox "$selected_user has been reactivated." 8 40
+                            # Ask if want to reset password on reactivation
+                            dialog --yesno "Do you want to reset the password for $selected_user now?" 7 50
+                            if [ $? -eq 0 ]; then
+                                dialog --insecure --passwordbox "Enter new password for $selected_user:" 8 40 2> "$TMPFILE"
+                                if [ $? -eq 0 ]; then
+                                    newpass=$(<"$TMPFILE")
+                                    echo "$selected_user:$newpass" | sudo chpasswd
+                                    dialog --msgbox "Password reset for $selected_user." 8 40
+                                fi
+                            fi
+                        fi
+                    else
+                        dialog --yesno "User $selected_user is currently active.\nDo you want to deactivate this user?" 8 60
+                        if [ $? -eq 0 ]; then
+                            sudo passwd -l "$selected_user"
+                            echo "$(date '+%Y-%m-%d %H:%M:%S') User $selected_user deactivated" | sudo tee -a "$LOGFILE" > /dev/null
+                            dialog --msgbox "$selected_user has been deactivated." 8 40
+                            # No password prompt on deactivate
+                        fi
+                    fi
+                    # Update status after change
+                    passwd_status=$(sudo passwd -S "$selected_user" 2>/dev/null)
+                    if echo "$passwd_status" | grep -q " L "; then
+                        active_status="Deactivated (Locked)"
+                        is_deactivated=true
+                    else
+                        active_status="Activated"
+                        is_deactivated=false
+                    fi
+                    ;;
+                7) break ;;
                 *) break ;;
             esac
         done
     done
 }
+
+
 
 # -------- Extract current server_url from script --------
 get_current_server_url() {
