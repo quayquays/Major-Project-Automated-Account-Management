@@ -65,6 +65,9 @@ detect_dormant_user() {
     dormant_detected_user=()
     about_to_be_dormant_user=()
     dormant_email_log=()
+    DEACTIVATION_LOG="/var/log/automated_deactivation.log"
+    mkdir -p "$(dirname "$DEACTIVATION_LOG")"
+    touch "$DEACTIVATION_LOG"
 
     for user in $user_account; do
         # Check if user has opted in to keep account
@@ -105,11 +108,20 @@ detect_dormant_user() {
 
                 if [ "$diff_days" -ge "$DORMANT_USERACCOUNT_DURATION" ]; then
                     dormant_detected_user+=("$user")
+
+                    # Auto-deactivate user
+                    usermod -L "$user" 2>/dev/null
+                    usermod -s /sbin/nologin "$user" 2>/dev/null
+
+                    # Log deactivation with timestamp
+                    timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+                    echo "$timestamp - Deactivated user: $user (inactive for $diff_days days)" >> "$DEACTIVATION_LOG"
                 fi
             fi
         fi
     done
 }
+
 
 check_password_expiry() {
     password_expired_user=()
