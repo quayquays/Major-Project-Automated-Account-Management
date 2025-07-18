@@ -65,21 +65,34 @@ send_email_to_user() {
     local user=$1
     local email=$2
     local days_inactive=$3
-    local server_url="http://ngrok_url"  # Replace with actual ngrok/public IP
+    local server_url="http://ngrok_url"  # Replace with your actual URL
 
     local confirm_url="${server_url}/confirm?user=${user}&response=yes"
-    local deny_url="${server_url}/deactivate/${user}?response=no"  # New "No" URL for deactivation
+    local deny_url="${server_url}/deactivate/${user}?response=no"
 
     local subject="⚠️ Your account will be deactivated in 7 days"
-    local body="Hi $user,\n\nOur records show your account has been inactive for $days_inactive days.\n\nYour account will be deactivated in 7 days if no action is taken.\n\nWould you like to keep your account?\n\nYES: $confirm_url\nNO: $deny_url\n\nThank you."
+
+    local body="<html><body>
+        <p>Hi ${user},</p>
+        <p>Your account has been inactive for <strong>${days_inactive}</strong> days.</p>
+        <p>Your account will be deactivated in 7 days if no action is taken.</p>
+        <p>Please choose an option below:</p>
+        <p>
+            <a href='${confirm_url}' style='display:inline-block;padding:10px 15px;background:#4CAF50;color:#fff;text-decoration:none;border-radius:4px;margin-right:10px;'>Keep My Account</a>
+            <a href='${deny_url}' style='display:inline-block;padding:10px 15px;background:#f44336;color:#fff;text-decoration:none;border-radius:4px;'>Deactivate My Account</a>
+        </p>
+        <p>Thanks,<br>${SYSADMIN_NAME}</p>
+    </body></html>"
 
     sendemail -f "$from_email" \
               -t "$email" \
               -u "$subject" \
               -m "$body" \
               -s smtp.gmail.com:587 \
-              -o tls=yes -xu "$login_email" -xp "$app_password"
+              -o tls=yes -xu "$login_email" -xp "$app_password" \
+              -o message-content-type=html
 }
+
 
 check_user_account() {
     user_account=$(awk -F: '$3 >= 1000 && $1 != "nobody" {print $1}' /etc/passwd)
