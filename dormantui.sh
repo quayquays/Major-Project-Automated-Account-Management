@@ -1,4 +1,4 @@
-#!/bin/bash
+!/bin/bash
 
 # Paths and temp files
 TMPFILE="/tmp/dormant_ui_tmp.$$"
@@ -23,7 +23,7 @@ main_menu() {
         case $CHOICE in
             1) user_management_menu ;;
             2) system_configuration_menu ;;
-            3) view_reports ;;
+            3) reports_menu ;;
             4) set_expiry ;;
             5) clear; break ;;
             *) clear; break ;;
@@ -78,6 +78,29 @@ system_configuration_menu() {
 }
 
 # -------- view reports --------
+# New: Reports Menu with extra options
+# -------- Reports Menu with extra options --------
+reports_menu() {
+    while true; do
+        CHOICE=$(dialog --clear --backtitle "Reports Management" \
+            --title "Reports Menu" \
+            --menu "Select an option:" 15 60 5 \
+            1 "View Dormant Reports" \
+            2 "Manage Cybersecurity Professionals" \
+            3 "Update Sysadmin Name" \
+            4 "Back to Main Menu" \
+            3>&1 1>&2 2>&3)
+
+        case $CHOICE in
+            1) view_reports ;;
+            2) manage_cybersecurity_professionals ;;
+            3) update_sysadmin_name ;;
+            4) break ;;
+            *) break ;;
+        esac
+    done
+}
+
 view_reports() {
     declare -A FILE_MAP
     mapfile -t files < <(ls -t "$REPORT_DIR"/dormant_report_*.txt 2>/dev/null)
@@ -147,6 +170,226 @@ view_reports() {
     if [ -n "$CHOSEN" ]; then
         dialog --textbox "${FILE_MAP[$CHOSEN]}" 25 80
     fi
+}
+
+
+
+# -------- Manage Cybersecurity Professionals --------
+
+manage_cybersecurity_professionals() {
+    local FILE="/etc/cybersecurity_professionals.conf"
+    local TMPFILE="/tmp/cybersec_tmp.$$"
+    declare -A professionals
+
+    save_professionals() {
+        {
+            echo "# Cybersecurity Professionals"
+            for name in "${!professionals[@]}"; do
+                echo "$name <${professionals[$name]}>"
+            done
+        } | sudo tee "$FILE" > /dev/null
+    }
+
+    # Load entries into associative array
+    if [[ -f "$FILE" ]]; then
+        while IFS= read -r line; do
+            [[ -z "$line" || "$line" =~ ^# ]] && continue
+            if [[ "$line" == *"<"*">" ]]; then
+                name="${line%%<*}"
+                name="${name%" "}"  # trim trailing space
+                email="${line##*<}"
+                email="${email%%>*}"
+                professionals["$name"]="$email"
+            fi
+        done < "$FILE"
+    fi
+
+    while true; do
+        ACTION=$(dialog --clear --backtitle "Manage Cybersecurity Professionals" \
+            --title "Choose Action" \
+            --menu "Select an action:" 15 50 6 \
+            1 "Search Professionals" \
+            2 "Add New Professional" \
+            3 "Edit Existing Professional" \
+            4 "Delete Professional" \
+            5 "Back to Reports Menu" \
+            3>&1 1>&2 2>&3)
+
+        [[ -z "$ACTION" || "$ACTION" == "5" ]] && break
+
+        case $ACTION in
+            1)  # Search
+                dialog --inputbox "Enter search keyword (name or email):" 8 50 2> "$TMPFILE"
+                [[ $? -ne 0 ]] && continue
+                keyword=$(<"$TMPFILE")
+                keyword=$(echo "$keyword" | xargs)
+                if [[ -z "$keyword" ]]; then
+                    dialog --msgbox "No input entered." 6 40
+                    continue
+                fi
+
+                OPTIONS=()
+                for name in "${!professionals[@]}"; do
+                    email="${professionals[$name]}"
+                    if [[ "${name,,}" == *"${keyword,,}"* || "${email,,}" == *"${keyword,,}"* ]]; then
+                        OPTIONS+=("$name" "$email")
+                    fi
+                done
+
+                if [ ${#OPTIONS[@]} -eq 0 ]; then
+                    dialog --msgbox "No matching professionals found." 6 40
+                else
+                    dialog --menu "Search results:" 20 60 10 "${OPTIONS[@]}" 3>&1 1>&2 2>&3 >/dev/null
+                fi
+                ;;
+            2)  # Add
+                dialog --inputbox "Enter full name:" 8 50 2> "$TMPFILE"
+                [[ $? -ne 0 ]] && continue
+                new_name=$(<"$TMPFILE")
+                new_name=$(echo "$new_name" | xargs)
+
+                dialog --inputbox "Enter email address:" 8 50 2> "$TMPFILE"
+                [[ $? -ne 0 ]] && continue
+                new_email=$(<"$TMPFILE")
+                new_email=$(echo "$new_email" | xargs)
+
+                if [[ -z "$new_name" || -z "$new_email" ]]; then
+                    dialog --msgbox "Name and email cannot be empty." 6 40
+                    continue
+                fi
+
+                if [[ -n "${professionals[$new_name]}" ]]; then
+                    dialog --yesno "Entry with this name exists. Overwrite?" 7 50
+                    [[ $? -ne 0 ]] && continue
+                fi
+
+                professionals["$new_name"]="$new_email"
+                save_professionals
+                dialog --msgbox "User added/updated." 5 30
+                ;;
+            3)  # Edit
+                if [ ${#professionals[@]} -eq 0 ]; then
+                    dialog --msgbox "No users to edit." 6 40
+                    continue
+                fi
+
+                OPTIONS=()
+                for name in "${!professionals[@]}"; do
+                    OPTIONS+=("$name" "${professionals[$name]}")
+                done
+
+                SELECTED=$(dialog --menu "Select user to edit:" 20 60 10 "${OPTIONS[@]}" 3>&1 1>&2 2>&3)
+                [[ -z "$SELECTED" ]] && continue
+
+                cur_email="${professionals[$SELECTED]}"
+
+                EDIT_ACTION=$(dialog --menu "Edit $SELECTED <$cur_email>: Select action" 15 50 3 \
+                    1 "Update Email" \
+                    2 "Rename User" \
+                    3 "Cancel" \
+                    3>&1 1>&2 2>&3)
+
+                case "$EDIT_ACTION" in
+                    1)
+                        dialog --inputbox "Enter new email for $SELECTED:" 8 60 "$cur_email" 2> "$TMPFILE"
+                        if [[ $? -eq 0 ]]; then
+                            new_email=$(<"$TMPFILE")
+                            new_email=$(echo "$new_email" | xargs)
+                            if [[ -n "$new_email" ]]; then
+                                professionals["$SELECTED"]="$new_email"
+                                save_professionals
+                                dialog --msgbox "User updated." 5 30
+                            else
+                                dialog --msgbox "Email empty. Update cancelled." 5 30
+                            fi
+                        fi
+                        ;;
+                    2)
+                        dialog --inputbox "Enter new name for $SELECTED:" 8 50 "$SELECTED" 2> "$TMPFILE"
+                        if [[ $? -eq 0 ]]; then
+                            new_name=$(<"$TMPFILE")
+                            new_name=$(echo "$new_name" | xargs)
+                            if [[ -n "$new_name" ]]; then
+                                if [[ "$new_name" != "$SELECTED" && -n "${professionals[$new_name]}" ]]; then
+                                    dialog --msgbox "Name exists. Rename cancelled." 5 30
+                                else
+                                    professionals["$new_name"]="${professionals[$SELECTED]}"
+                                    unset 'professionals[$SELECTED]'
+                                    save_professionals
+                                    dialog --msgbox "User updated." 5 30
+                                fi
+                            else
+                                dialog --msgbox "Name empty. Rename cancelled." 5 30
+                            fi
+                        fi
+                        ;;
+                    3|*) ;;  # Cancel
+                esac
+                ;;
+            4)  # Delete
+                if [ ${#professionals[@]} -eq 0 ]; then
+                    dialog --msgbox "No users to delete." 6 40
+                    continue
+                fi
+
+                OPTIONS=()
+                for name in "${!professionals[@]}"; do
+                    OPTIONS+=("$name" "${professionals[$name]}")
+                done
+
+                DEL_SELECTED=$(dialog --menu "Select user to delete:" 20 60 10 "${OPTIONS[@]}" 3>&1 1>&2 2>&3)
+                [[ -z "$DEL_SELECTED" ]] && continue
+
+                dialog --yesno "Are you sure you want to delete $DEL_SELECTED <${professionals[$DEL_SELECTED]}>?" 7 60
+                if [[ $? -eq 0 ]]; then
+                    unset 'professionals[$DEL_SELECTED]'
+                    save_professionals
+                    dialog --msgbox "User deleted." 5 30
+                fi
+                ;;
+        esac
+    done
+
+    rm -f "$TMPFILE"
+}
+
+
+# -------- Update sysadmin name --------
+update_sysadmin_name() {
+    local CONFIG="/etc/dormant.conf"
+    local TMPFILE="/tmp/sysadmin_tmp.$$"
+
+    # Extract current sysadmin_name value
+    local current_name=$(grep -Po '^sysadmin_name=".*?"' "$CONFIG" 2>/dev/null | sed -E 's/sysadmin_name="(.*)"/\1/')
+
+    # Prompt user to update
+    dialog --inputbox "Current sysadmin name:\n$([ -z "$current_name" ] && echo '(empty)')" 8 60 "$current_name" 2> "$TMPFILE"
+    if [[ $? -ne 0 ]]; then
+        rm -f "$TMPFILE"
+        return
+    fi
+
+    local new_name=$(<"$TMPFILE")
+    new_name=$(echo "$new_name" | xargs)  # trim whitespace
+
+    if [[ -z "$new_name" ]]; then
+        dialog --yesno "You entered an empty name.\nThis will remove the sysadmin_name entry from the config.\nProceed?" 8 60
+        if [[ $? -eq 0 ]]; then
+            sudo sed -i '/^sysadmin_name=/d' "$CONFIG"
+            dialog --msgbox "sysadmin_name removed from config." 6 40
+        else
+            dialog --msgbox "No changes made." 6 40
+        fi
+    else
+        if grep -q '^sysadmin_name=' "$CONFIG"; then
+            sudo sed -i "s|^sysadmin_name=.*|sysadmin_name=\"$new_name\"|" "$CONFIG"
+        else
+            echo "sysadmin_name=\"$new_name\"" | sudo tee -a "$CONFIG" > /dev/null
+        fi
+        dialog --msgbox "sysadmin_name updated to: $new_name" 6 50
+    fi
+
+    rm -f "$TMPFILE"
 }
 
 
@@ -364,10 +607,9 @@ update_config() {
 
     CHOICE=$(dialog --menu "Which setting do you want to update?" 20 60 10 \
         1 "User Dormancy (Current: $DORMANT_USERACCOUNT_DURATION days)" \
-        2 "Service Dormancy (Current: $DORMANT_SERVICEACCOUNT_DURATION days)" \
-        3 "Password Expiry (Current: $DORMANT_PASSWORD_EXPIRY_DURATION days)" \
-        4 "Cron Schedule (Current: $DORMANT_CRON_SCHEDULE)" \
-        5 "Back" \
+        2 "Password Expiry (Current: $DORMANT_PASSWORD_EXPIRY_DURATION days)" \
+        3 "Cron Schedule (Current: $DORMANT_CRON_SCHEDULE)" \
+        4 "Back" \
         3>&1 1>&2 2>&3)
 
     case $CHOICE in
@@ -381,15 +623,6 @@ update_config() {
             fi
             ;;
         2)
-            NEW=$(dialog --inputbox "Enter new dormant service account duration (days):" 8 50 "$DORMANT_SERVICEACCOUNT_DURATION" 2>&1 >/dev/tty)
-            if [[ -n "$NEW" && "$NEW" =~ ^[0-9]+$ ]]; then
-                sudo sed -i "s/^DORMANT_SERVICEACCOUNT_DURATION=.*/DORMANT_SERVICEACCOUNT_DURATION=$NEW/" "$CONFIG_FILE"
-                dialog --msgbox "Updated service dormancy to $NEW days." 6 50
-            else
-                dialog --msgbox "Invalid input. Update cancelled." 6 50
-            fi
-            ;;
-        3)
             NEW=$(dialog --inputbox "Enter new password expiry duration (days):" 8 50 "$DORMANT_PASSWORD_EXPIRY_DURATION" 2>&1 >/dev/tty)
             if [[ -n "$NEW" && "$NEW" =~ ^[0-9]+$ ]]; then
                 sudo sed -i "s/^DORMANT_PASSWORD_EXPIRY_DURATION=.*/DORMANT_PASSWORD_EXPIRY_DURATION=$NEW/" "$CONFIG_FILE"
@@ -398,7 +631,7 @@ update_config() {
                 dialog --msgbox "Invalid input. Update cancelled." 6 50
             fi
             ;;
-        4)
+        3)
             # Cron schedule submenu
             CRON_CHOICE=$(dialog --menu "Update Cron Schedule - Choose method:" 15 50 3 \
                 1 "Custom cron schedule (manual input)" \
@@ -443,7 +676,7 @@ update_config() {
 
             dialog --msgbox "Crontab updated with schedule:\n$NEW" 6 50
             ;;
-        5)
+        4)
             return
             ;;
         *)
@@ -463,8 +696,9 @@ edit_existing_user() {
         done < "$EMAIL_CONF"
     fi
 
-    # Define log file path
     LOGFILE="/var/log/user_edit.log"
+    MANUAL_DEACTIVATION_LOG="/var/log/manual_deactivation.log"
+    REACTIVATION_LOG="/var/log/reactivation.log"
     TMPFILE="/tmp/user_edit_tmp.$$"
 
     while true; do
@@ -594,9 +828,8 @@ edit_existing_user() {
                         dialog --yesno "User $selected_user is currently deactivated.\nDo you want to reactivate this user?" 8 60
                         if [ $? -eq 0 ]; then
                             sudo passwd -u "$selected_user"
-                            echo "$(date '+%Y-%m-%d %H:%M:%S') User $selected_user reactivated" | sudo tee -a "$LOGFILE" > /dev/null
+                            echo "$(date '+%Y-%m-%d %H:%M:%S') User $selected_user reactivated" | sudo tee -a "$REACTIVATION_LOG" > /dev/null
                             dialog --msgbox "$selected_user has been reactivated." 8 40
-                            # Ask if want to reset password on reactivation
                             dialog --yesno "Do you want to reset the password for $selected_user now?" 7 50
                             if [ $? -eq 0 ]; then
                                 dialog --insecure --passwordbox "Enter new password for $selected_user:" 8 40 2> "$TMPFILE"
@@ -611,12 +844,12 @@ edit_existing_user() {
                         dialog --yesno "User $selected_user is currently active.\nDo you want to deactivate this user?" 8 60
                         if [ $? -eq 0 ]; then
                             sudo passwd -l "$selected_user"
-                            echo "$(date '+%Y-%m-%d %H:%M:%S') User $selected_user deactivated" | sudo tee -a "$LOGFILE" > /dev/null
+                            echo "$(date '+%Y-%m-%d %H:%M:%S') User $selected_user deactivated" | sudo tee -a "$MANUAL_DEACTIVATION_LOG" > /dev/null
                             dialog --msgbox "$selected_user has been deactivated." 8 40
-                            # No password prompt on deactivate
                         fi
                     fi
-                    # Update status after change
+
+                    # Refresh user status
                     passwd_status=$(sudo passwd -S "$selected_user" 2>/dev/null)
                     if echo "$passwd_status" | grep -q " L "; then
                         active_status="Deactivated (Locked)"
