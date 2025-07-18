@@ -101,19 +101,99 @@ reports_menu() {
     done
 }
 
+view_reports() {
+    declare -A FILE_MAP
+    mapfile -t files < <(ls -t "$REPORT_DIR"/dormant_report_*.txt 2>/dev/null)
+    if [ ${#files[@]} -eq 0 ]; then
+        dialog --msgbox "No reports found in $REPORT_DIR." 10 40
+        return
+    fi
+
+    dialog --inputbox "Enter date to search (e.g. 12 July 2025) or leave blank to list all:" 8 60 2> "$TMPFILE"
+    search=$(<"$TMPFILE")
+
+    OPTIONS=()
+    for file in "${files[@]}"; do
+        filename=$(basename "$file")
+        rawdate="${filename#dormant_report_}"
+        rawdate="${rawdate%.txt}"
+
+        # Split parts: day, month abbrev, year, time (with AM/PM)
+        day=$(echo "$rawdate" | cut -d'_' -f1)
+        month_abbr=$(echo "$rawdate" | cut -d'_' -f2)
+        year=$(echo "$rawdate" | cut -d'_' -f3)
+        time_raw=$(echo "$rawdate" | cut -d'_' -f4-)
+
+        # Convert month abbrev to full month name
+        case "$month_abbr" in
+            Jan) month_full="January" ;;
+            Feb) month_full="February" ;;
+            Mar) month_full="March" ;;
+            Apr) month_full="April" ;;
+            May) month_full="May" ;;
+            Jun) month_full="June" ;;
+            Jul) month_full="July" ;;
+            Aug) month_full="August" ;;
+            Sep) month_full="September" ;;
+            Oct) month_full="October" ;;
+            Nov) month_full="November" ;;
+            Dec) month_full="December" ;;
+            *) month_full="$month_abbr" ;;
+        esac
+
+        # Time raw looks like 09-16_PM or 02-30_AM
+        # Convert to 12-hour with colon and space before AM/PM
+        time_formatted=$(echo "$time_raw" | sed -r 's/^([0-9]{2})-([0-9]{2})_(AM|PM)$/\1:\2 \3/')
+
+        # Remove leading zero from hour for nicer format (e.g. 09:16 PM -> 9:16 PM)
+        time_formatted=$(echo "$time_formatted" | sed -r 's/^0([1-9])/\1/')
+
+        display="${day} ${month_full} ${year} at ${time_formatted}"
+
+        # Filter by user search input if given (case insensitive)
+        if [[ -z "$search" || "${display,,}" == *"${search,,}"* ]]; then
+            OPTIONS+=("$display" "")
+            FILE_MAP["$display"]="$file"
+        fi
+    done
+
+    if [ ${#OPTIONS[@]} -eq 0 ]; then
+        dialog --msgbox "No reports match your input." 8 40
+        return
+    fi
+
+    CHOSEN=$(dialog --title "Dormant Reports" \
+        --menu "Select a report to view:" 20 70 10 \
+        "${OPTIONS[@]}" \
+        3>&1 1>&2 2>&3)
+
+    if [ -n "$CHOSEN" ]; then
+        dialog --textbox "${FILE_MAP[$CHOSEN]}" 25 80
+    fi
+}
+
+
+
 # -------- Manage Cybersecurity Professionals --------
+
 manage_cybersecurity_professionals() {
     local FILE="/etc/cybersecurity_professionals.conf"
     local TMPFILE="/tmp/cybersec_tmp.$$"
     declare -A professionals
 
-    # Load current entries into associative array
+    save_professionals() {
+        {
+            echo "# Cybersecurity Professionals"
+            for name in "${!professionals[@]}"; do
+                echo "$name <${professionals[$name]}>"
+            done
+        } | sudo tee "$FILE" > /dev/null
+    }
+
+    # Load entries into associative array
     if [[ -f "$FILE" ]]; then
         while IFS= read -r line; do
-            # Skip empty or comment lines
             [[ -z "$line" || "$line" =~ ^# ]] && continue
-
-            # Parse: Name <email> safely without regex errors
             if [[ "$line" == *"<"*">" ]]; then
                 name="${line%%<*}"
                 name="${name%" "}"  # trim trailing space
@@ -125,116 +205,154 @@ manage_cybersecurity_professionals() {
     fi
 
     while true; do
-        # Build dialog menu options list
-        OPTIONS=()
-        for name in "${!professionals[@]}"; do
-            OPTIONS+=("$name" "${professionals[$name]}")
-        done
-
-        # Add options to add new professional or back
-        OPTIONS+=("ADD" "Add new cyber professional")
-        OPTIONS+=("BACK" "Back to Reports Menu")
-
-        CHOICE=$(dialog --clear --backtitle "Manage Cybersecurity Professionals" \
-            --title "Cybersecurity Professionals" \
-            --menu "Select an entry to edit, or add a new one:" 20 70 15 \
-            "${OPTIONS[@]}" \
+        ACTION=$(dialog --clear --backtitle "Manage Cybersecurity Professionals" \
+            --title "Choose Action" \
+            --menu "Select an action:" 15 50 6 \
+            1 "Search Professionals" \
+            2 "Add New Professional" \
+            3 "Edit Existing Professional" \
+            4 "Delete Professional" \
+            5 "Back to Reports Menu" \
             3>&1 1>&2 2>&3)
 
-        if [[ -z "$CHOICE" || "$CHOICE" == "BACK" ]]; then
-            break
-        elif [[ "$CHOICE" == "ADD" ]]; then
-            # Add new professional
-            dialog --inputbox "Enter full name:" 8 50 2> "$TMPFILE"
-            if [[ $? -ne 0 ]]; then continue; fi
-            new_name=$(<"$TMPFILE")
-            new_name=$(echo "$new_name" | xargs)  # trim whitespace
+        [[ -z "$ACTION" || "$ACTION" == "5" ]] && break
 
-            dialog --inputbox "Enter email address:" 8 50 2> "$TMPFILE"
-            if [[ $? -ne 0 ]]; then continue; fi
-            new_email=$(<"$TMPFILE")
-            new_email=$(echo "$new_email" | xargs)
-
-            if [[ -z "$new_name" || -z "$new_email" ]]; then
-                dialog --msgbox "Name and email cannot be empty." 6 40
-                continue
-            fi
-
-            # Check if already exists
-            if [[ -n "${professionals[$new_name]}" ]]; then
-                dialog --yesno "Entry with this name already exists. Overwrite?" 7 50
-                if [[ $? -ne 0 ]]; then
+        case $ACTION in
+            1)  # Search
+                dialog --inputbox "Enter search keyword (name or email):" 8 50 2> "$TMPFILE"
+                [[ $? -ne 0 ]] && continue
+                keyword=$(<"$TMPFILE")
+                keyword=$(echo "$keyword" | xargs)
+                if [[ -z "$keyword" ]]; then
+                    dialog --msgbox "No input entered." 6 40
                     continue
                 fi
-            fi
 
-            professionals["$new_name"]="$new_email"
-            dialog --msgbox "Added/updated $new_name <$new_email>." 6 50
-
-        else
-            # Edit existing professional
-            local cur_email="${professionals[$CHOICE]}"
-            ACTION=$(dialog --menu "Selected: $CHOICE <$cur_email>\nChoose action:" 15 50 4 \
-                1 "Update Email" \
-                2 "Rename" \
-                3 "Remove" \
-                4 "Back" \
-                3>&1 1>&2 2>&3)
-
-            case $ACTION in
-                1)  # Update Email
-                    dialog --inputbox "Enter new email for $CHOICE:" 8 60 "$cur_email" 2> "$TMPFILE"
-                    if [[ $? -eq 0 ]]; then
-                        new_email=$(<"$TMPFILE")
-                        new_email=$(echo "$new_email" | xargs)
-                        if [[ -n "$new_email" ]]; then
-                            professionals["$CHOICE"]="$new_email"
-                            dialog --msgbox "Email updated for $CHOICE." 6 40
-                        else
-                            dialog --msgbox "Email cannot be empty. Update cancelled." 6 40
-                        fi
+                OPTIONS=()
+                for name in "${!professionals[@]}"; do
+                    email="${professionals[$name]}"
+                    if [[ "${name,,}" == *"${keyword,,}"* || "${email,,}" == *"${keyword,,}"* ]]; then
+                        OPTIONS+=("$name" "$email")
                     fi
-                    ;;
-                2)  # Rename
-                    dialog --inputbox "Enter new name for $CHOICE:" 8 50 "$CHOICE" 2> "$TMPFILE"
-                    if [[ $? -eq 0 ]]; then
-                        new_name=$(<"$TMPFILE")
-                        new_name=$(echo "$new_name" | xargs)
-                        if [[ -n "$new_name" ]]; then
-                            if [[ "$new_name" != "$CHOICE" && -n "${professionals[$new_name]}" ]]; then
-                                dialog --msgbox "Name already exists. Rename cancelled." 6 40
+                done
+
+                if [ ${#OPTIONS[@]} -eq 0 ]; then
+                    dialog --msgbox "No matching professionals found." 6 40
+                else
+                    dialog --menu "Search results:" 20 60 10 "${OPTIONS[@]}" 3>&1 1>&2 2>&3 >/dev/null
+                fi
+                ;;
+            2)  # Add
+                dialog --inputbox "Enter full name:" 8 50 2> "$TMPFILE"
+                [[ $? -ne 0 ]] && continue
+                new_name=$(<"$TMPFILE")
+                new_name=$(echo "$new_name" | xargs)
+
+                dialog --inputbox "Enter email address:" 8 50 2> "$TMPFILE"
+                [[ $? -ne 0 ]] && continue
+                new_email=$(<"$TMPFILE")
+                new_email=$(echo "$new_email" | xargs)
+
+                if [[ -z "$new_name" || -z "$new_email" ]]; then
+                    dialog --msgbox "Name and email cannot be empty." 6 40
+                    continue
+                fi
+
+                if [[ -n "${professionals[$new_name]}" ]]; then
+                    dialog --yesno "Entry with this name exists. Overwrite?" 7 50
+                    [[ $? -ne 0 ]] && continue
+                fi
+
+                professionals["$new_name"]="$new_email"
+                save_professionals
+                dialog --msgbox "User added/updated." 5 30
+                ;;
+            3)  # Edit
+                if [ ${#professionals[@]} -eq 0 ]; then
+                    dialog --msgbox "No users to edit." 6 40
+                    continue
+                fi
+
+                OPTIONS=()
+                for name in "${!professionals[@]}"; do
+                    OPTIONS+=("$name" "${professionals[$name]}")
+                done
+
+                SELECTED=$(dialog --menu "Select user to edit:" 20 60 10 "${OPTIONS[@]}" 3>&1 1>&2 2>&3)
+                [[ -z "$SELECTED" ]] && continue
+
+                cur_email="${professionals[$SELECTED]}"
+
+                EDIT_ACTION=$(dialog --menu "Edit $SELECTED <$cur_email>: Select action" 15 50 3 \
+                    1 "Update Email" \
+                    2 "Rename User" \
+                    3 "Cancel" \
+                    3>&1 1>&2 2>&3)
+
+                case "$EDIT_ACTION" in
+                    1)
+                        dialog --inputbox "Enter new email for $SELECTED:" 8 60 "$cur_email" 2> "$TMPFILE"
+                        if [[ $? -eq 0 ]]; then
+                            new_email=$(<"$TMPFILE")
+                            new_email=$(echo "$new_email" | xargs)
+                            if [[ -n "$new_email" ]]; then
+                                professionals["$SELECTED"]="$new_email"
+                                save_professionals
+                                dialog --msgbox "User updated." 5 30
                             else
-                                professionals["$new_name"]="${professionals[$CHOICE]}"
-                                unset 'professionals[$CHOICE]'
-                                dialog --msgbox "Renamed $CHOICE to $new_name." 6 40
+                                dialog --msgbox "Email empty. Update cancelled." 5 30
                             fi
-                        else
-                            dialog --msgbox "Name cannot be empty. Rename cancelled." 6 40
                         fi
-                    fi
-                    ;;
-                3)  # Remove
-                    dialog --yesno "Remove $CHOICE <$cur_email>? This cannot be undone." 8 50
-                    if [[ $? -eq 0 ]]; then
-                        unset 'professionals[$CHOICE]'
-                        dialog --msgbox "$CHOICE removed." 6 40
-                    fi
-                    ;;
-                4|*) ;;  # Back or cancel
-            esac
-        fi
+                        ;;
+                    2)
+                        dialog --inputbox "Enter new name for $SELECTED:" 8 50 "$SELECTED" 2> "$TMPFILE"
+                        if [[ $? -eq 0 ]]; then
+                            new_name=$(<"$TMPFILE")
+                            new_name=$(echo "$new_name" | xargs)
+                            if [[ -n "$new_name" ]]; then
+                                if [[ "$new_name" != "$SELECTED" && -n "${professionals[$new_name]}" ]]; then
+                                    dialog --msgbox "Name exists. Rename cancelled." 5 30
+                                else
+                                    professionals["$new_name"]="${professionals[$SELECTED]}"
+                                    unset 'professionals[$SELECTED]'
+                                    save_professionals
+                                    dialog --msgbox "User updated." 5 30
+                                fi
+                            else
+                                dialog --msgbox "Name empty. Rename cancelled." 5 30
+                            fi
+                        fi
+                        ;;
+                    3|*) ;;  # Cancel
+                esac
+                ;;
+            4)  # Delete
+                if [ ${#professionals[@]} -eq 0 ]; then
+                    dialog --msgbox "No users to delete." 6 40
+                    continue
+                fi
 
-        # Save updates to file
-        {
-            echo "# Cybersecurity Professionals"
-            for name in "${!professionals[@]}"; do
-                echo "$name <${professionals[$name]}>"
-            done
-        } | sudo tee "$FILE" > /dev/null
+                OPTIONS=()
+                for name in "${!professionals[@]}"; do
+                    OPTIONS+=("$name" "${professionals[$name]}")
+                done
+
+                DEL_SELECTED=$(dialog --menu "Select user to delete:" 20 60 10 "${OPTIONS[@]}" 3>&1 1>&2 2>&3)
+                [[ -z "$DEL_SELECTED" ]] && continue
+
+                dialog --yesno "Are you sure you want to delete $DEL_SELECTED <${professionals[$DEL_SELECTED]}>?" 7 60
+                if [[ $? -eq 0 ]]; then
+                    unset 'professionals[$DEL_SELECTED]'
+                    save_professionals
+                    dialog --msgbox "User deleted." 5 30
+                fi
+                ;;
+        esac
     done
 
     rm -f "$TMPFILE"
 }
+
 
 # -------- Update sysadmin name --------
 update_sysadmin_name() {
