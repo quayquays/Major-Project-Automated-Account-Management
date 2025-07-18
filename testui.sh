@@ -607,10 +607,9 @@ update_config() {
 
     CHOICE=$(dialog --menu "Which setting do you want to update?" 20 60 10 \
         1 "User Dormancy (Current: $DORMANT_USERACCOUNT_DURATION days)" \
-        2 "Service Dormancy (Current: $DORMANT_SERVICEACCOUNT_DURATION days)" \
-        3 "Password Expiry (Current: $DORMANT_PASSWORD_EXPIRY_DURATION days)" \
-        4 "Cron Schedule (Current: $DORMANT_CRON_SCHEDULE)" \
-        5 "Back" \
+        2 "Password Expiry (Current: $DORMANT_PASSWORD_EXPIRY_DURATION days)" \
+        3 "Cron Schedule (Current: $DORMANT_CRON_SCHEDULE)" \
+        4 "Back" \
         3>&1 1>&2 2>&3)
 
     case $CHOICE in
@@ -624,15 +623,6 @@ update_config() {
             fi
             ;;
         2)
-            NEW=$(dialog --inputbox "Enter new dormant service account duration (days):" 8 50 "$DORMANT_SERVICEACCOUNT_DURATION" 2>&1 >/dev/tty)
-            if [[ -n "$NEW" && "$NEW" =~ ^[0-9]+$ ]]; then
-                sudo sed -i "s/^DORMANT_SERVICEACCOUNT_DURATION=.*/DORMANT_SERVICEACCOUNT_DURATION=$NEW/" "$CONFIG_FILE"
-                dialog --msgbox "Updated service dormancy to $NEW days." 6 50
-            else
-                dialog --msgbox "Invalid input. Update cancelled." 6 50
-            fi
-            ;;
-        3)
             NEW=$(dialog --inputbox "Enter new password expiry duration (days):" 8 50 "$DORMANT_PASSWORD_EXPIRY_DURATION" 2>&1 >/dev/tty)
             if [[ -n "$NEW" && "$NEW" =~ ^[0-9]+$ ]]; then
                 sudo sed -i "s/^DORMANT_PASSWORD_EXPIRY_DURATION=.*/DORMANT_PASSWORD_EXPIRY_DURATION=$NEW/" "$CONFIG_FILE"
@@ -641,7 +631,7 @@ update_config() {
                 dialog --msgbox "Invalid input. Update cancelled." 6 50
             fi
             ;;
-        4)
+        3)
             # Cron schedule submenu
             CRON_CHOICE=$(dialog --menu "Update Cron Schedule - Choose method:" 15 50 3 \
                 1 "Custom cron schedule (manual input)" \
@@ -686,7 +676,7 @@ update_config() {
 
             dialog --msgbox "Crontab updated with schedule:\n$NEW" 6 50
             ;;
-        5)
+        4)
             return
             ;;
         *)
@@ -706,8 +696,9 @@ edit_existing_user() {
         done < "$EMAIL_CONF"
     fi
 
-    # Define log file path
     LOGFILE="/var/log/user_edit.log"
+    MANUAL_DEACTIVATION_LOG="/var/log/manual_deactivation.log"
+    REACTIVATION_LOG="/var/log/reactivation.log"
     TMPFILE="/tmp/user_edit_tmp.$$"
 
     while true; do
@@ -837,9 +828,8 @@ edit_existing_user() {
                         dialog --yesno "User $selected_user is currently deactivated.\nDo you want to reactivate this user?" 8 60
                         if [ $? -eq 0 ]; then
                             sudo passwd -u "$selected_user"
-                            echo "$(date '+%Y-%m-%d %H:%M:%S') User $selected_user reactivated" | sudo tee -a "$LOGFILE" > /dev/null
+                            echo "$(date '+%Y-%m-%d %H:%M:%S') User $selected_user reactivated" | sudo tee -a "$REACTIVATION_LOG" > /dev/null
                             dialog --msgbox "$selected_user has been reactivated." 8 40
-                            # Ask if want to reset password on reactivation
                             dialog --yesno "Do you want to reset the password for $selected_user now?" 7 50
                             if [ $? -eq 0 ]; then
                                 dialog --insecure --passwordbox "Enter new password for $selected_user:" 8 40 2> "$TMPFILE"
@@ -854,12 +844,12 @@ edit_existing_user() {
                         dialog --yesno "User $selected_user is currently active.\nDo you want to deactivate this user?" 8 60
                         if [ $? -eq 0 ]; then
                             sudo passwd -l "$selected_user"
-                            echo "$(date '+%Y-%m-%d %H:%M:%S') User $selected_user deactivated" | sudo tee -a "$LOGFILE" > /dev/null
+                            echo "$(date '+%Y-%m-%d %H:%M:%S') User $selected_user deactivated" | sudo tee -a "$MANUAL_DEACTIVATION_LOG" > /dev/null
                             dialog --msgbox "$selected_user has been deactivated." 8 40
-                            # No password prompt on deactivate
                         fi
                     fi
-                    # Update status after change
+
+                    # Refresh user status
                     passwd_status=$(sudo passwd -S "$selected_user" 2>/dev/null)
                     if echo "$passwd_status" | grep -q " L "; then
                         active_status="Deactivated (Locked)"
