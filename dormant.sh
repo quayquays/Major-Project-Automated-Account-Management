@@ -65,7 +65,7 @@ send_email_to_user() {
     local user=$1
     local email=$2
     local days_inactive=$3
-    local server_url="http://ngrok_url"  # Replace with your actual URL
+    local server_url="http://ngrok_url"  # Keep unchanged
 
     local confirm_url="${server_url}/confirm?user=${user}&response=yes"
     local deny_url="${server_url}/deactivate/${user}?response=no"
@@ -78,10 +78,10 @@ send_email_to_user() {
         <p>Your account will be deactivated in 7 days if no action is taken.</p>
         <p>Please choose an option below:</p>
         <p>
-            <a href='${confirm_url}' style='display:inline-block;padding:10px 15px;background:#4CAF50;color:#fff;text-decoration:none;border-radius:4px;margin-right:10px;'>Keep My Account</a>
-            <a href='${deny_url}' style='display:inline-block;padding:10px 15px;background:#f44336;color:#fff;text-decoration:none;border-radius:4px;'>Deactivate My Account</a>
+            <a href='${confirm_url}' style='color:#4CAF50; text-decoration:none;'>Click here to keep your account</a> &nbsp;&nbsp;
+            <a href='${deny_url}' style='color:#f44336; text-decoration:none;'>Click here to deactivate your account</a>
         </p>
-        <p>Thanks,<br>${SYSADMIN_NAME}</p>
+        <p>Thanks,<br>Your System Administrator</p>
     </body></html>"
 
     sendemail -f "$from_email" \
@@ -92,7 +92,6 @@ send_email_to_user() {
               -o tls=yes -xu "$login_email" -xp "$app_password" \
               -o message-content-type=html
 }
-
 
 check_user_account() {
     user_account=$(awk -F: '$3 >= 1000 && $1 != "nobody" {print $1}' /etc/passwd)
