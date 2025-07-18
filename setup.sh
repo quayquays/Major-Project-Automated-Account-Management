@@ -119,7 +119,7 @@ if [[ ! -f "$SYSADMIN_FILE" ]]; then
     cat <<EOL | sudo tee "$SYSADMIN_FILE" > /dev/null
 # Sysadmin name for report header
 # Example:
-# sysadmin_name="John Doe"
+sysadmin_name="John Doe"
 EOL
     echo "Created sysadmin name config: $SYSADMIN_FILE"
 else
