@@ -27,12 +27,34 @@ else
     SYSADMIN_NAME="System Administrator"
 fi
 
-
 # File containing cybersecurity personnel (name + email)
 CYBERSEC_FILE="/etc/cybersecurity_professionals.conf"
 
 OPT_IN_FILE="/etc/dormant_opt_in.conf"
 touch "$OPT_IN_FILE"
+
+# Log files
+EMAIL_DEACTIVATION_LOG="/var/log/dormant/deactivated_users.log"
+MANUAL_DEACTIVATION_LOG="/var/log/manual_deactivation.log"
+AUTO_DEACTIVATION_LOG="/var/log/automated_deactivation.log"
+REACTIVATION_LOG="/var/log/reactivation.log"
+
+# --- Load users reactivated within last 24 hours to skip dormant detection ---
+declare -A recently_reactivated_users=()
+if [[ -f "$REACTIVATION_LOG" ]]; then
+    today_ts=$(date +%s)
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^([0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}:[0-9]{2})\ -\ Reactivated\ user:\ ([^[:space:]]+) ]]; then
+            reactivation_time="${BASH_REMATCH[1]}"
+            user="${BASH_REMATCH[2]}"
+            reactivation_ts=$(date -d "$reactivation_time" +%s)
+            diff_sec=$(( today_ts - reactivation_ts ))
+            if (( diff_sec < 86400 )); then
+                recently_reactivated_users["$user"]=1
+            fi
+        fi
+    done < "$REACTIVATION_LOG"
+fi
 
 get_user_email() {
     local user=$1
@@ -67,11 +89,15 @@ detect_dormant_user() {
     dormant_detected_user=()
     about_to_be_dormant_user=()
     dormant_email_log=()
-    DEACTIVATION_LOG="/var/log/automated_deactivation.log"
-    mkdir -p "$(dirname "$DEACTIVATION_LOG")"
-    touch "$DEACTIVATION_LOG"
+    mkdir -p "$(dirname "$AUTO_DEACTIVATION_LOG")"
+    touch "$AUTO_DEACTIVATION_LOG"
 
     for user in $user_account; do
+        # Skip if user was recently reactivated (within last 24h)
+        if [[ -n "${recently_reactivated_users[$user]}" ]]; then
+            continue
+        fi
+
         # Check if user has opted in to keep account
         if grep -q "^$user=" "$OPT_IN_FILE"; then
             optin_date=$(grep "^$user=" "$OPT_IN_FILE" | cut -d= -f2)
@@ -124,14 +150,12 @@ detect_dormant_user() {
 
                     # Log deactivation with timestamp
                     timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-                    echo "$timestamp - Deactivated user: $user (inactive for $diff_days days)" >> "$DEACTIVATION_LOG"
+                    echo "$timestamp - Deactivated user: $user (inactive for $diff_days days)" >> "$AUTO_DEACTIVATION_LOG"
                 fi
             fi
         fi
     done
 }
-
-
 
 check_password_expiry() {
     password_expired_user=()
@@ -154,6 +178,7 @@ check_password_expiry() {
         fi
     done
 }
+
 generate_report() {
     REPORT_DIR="/dormant_reports"
     mkdir -p "$REPORT_DIR"
@@ -163,11 +188,7 @@ generate_report() {
 
     report_file="$REPORT_DIR/dormant_report_${safe_filename_time}.txt"
 
-    # Paths to logs you mentioned
-    EMAIL_DEACTIVATION_LOG="/var/log/dormant/deactivated_users.log"
-    MANUAL_DEACTIVATION_LOG="/var/log/manual_deactivation.log"
-    AUTO_DEACTIVATION_LOG="/var/log/automated_deactivation.log"
-    REACTIVATION_LOG="/var/log/reactivation.log"
+    today_date=$(date '+%Y-%m-%d')
 
     echo "---------------------------------------------------------------------------" > "$report_file"
     echo "Dormant User Account Report 📜" >> "$report_file"
@@ -179,7 +200,7 @@ generate_report() {
     echo "Users Deactivated via Email Link 🚫" >> "$report_file"
     echo "---------------------------------------------------------------------------" >> "$report_file"
     if [[ -s "$EMAIL_DEACTIVATION_LOG" ]]; then
-        tac "$EMAIL_DEACTIVATION_LOG" | head -n 20 >> "$report_file"
+        grep "^$today_date" "$EMAIL_DEACTIVATION_LOG" | sort -u | tac | head -n 20 >> "$report_file" || echo "No users deactivated via email today." >> "$report_file"
     else
         echo "No users deactivated via email." >> "$report_file"
     fi
@@ -189,7 +210,7 @@ generate_report() {
     echo "Users Manually Deactivated 🛠️" >> "$report_file"
     echo "---------------------------------------------------------------------------" >> "$report_file"
     if [[ -s "$MANUAL_DEACTIVATION_LOG" ]]; then
-        tac "$MANUAL_DEACTIVATION_LOG" | head -n 20 >> "$report_file"
+        grep "^$today_date" "$MANUAL_DEACTIVATION_LOG" | sort -u | tac | head -n 20 >> "$report_file" || echo "No manual deactivations recorded today." >> "$report_file"
     else
         echo "No manual deactivations recorded." >> "$report_file"
     fi
@@ -199,7 +220,7 @@ generate_report() {
     echo "Users Automatically Deactivated 🤖" >> "$report_file"
     echo "---------------------------------------------------------------------------" >> "$report_file"
     if [[ -s "$AUTO_DEACTIVATION_LOG" ]]; then
-        tac "$AUTO_DEACTIVATION_LOG" | head -n 20 >> "$report_file"
+        grep "^$today_date" "$AUTO_DEACTIVATION_LOG" | sort -u | tac | head -n 20 >> "$report_file" || echo "No automatic deactivations recorded today." >> "$report_file"
     else
         echo "No automatic deactivations recorded." >> "$report_file"
     fi
@@ -209,7 +230,7 @@ generate_report() {
     echo "Users Reactivated ♻️" >> "$report_file"
     echo "---------------------------------------------------------------------------" >> "$report_file"
     if [[ -s "$REACTIVATION_LOG" ]]; then
-        tac "$REACTIVATION_LOG" | head -n 20 >> "$report_file"
+        grep "^$today_date" "$REACTIVATION_LOG" | sort -u | tac | head -n 20 >> "$report_file" || echo "No reactivations recorded today." >> "$report_file"
     else
         echo "No reactivations recorded." >> "$report_file"
     fi
@@ -245,7 +266,6 @@ generate_report() {
     echo "$report_file"
 }
 
-
 send_report_to_cybersec() {
     local report_path=$1
 
@@ -263,11 +283,9 @@ send_report_to_cybersec() {
             local name="${BASH_REMATCH[1]}"
             local email="${BASH_REMATCH[2]}"
 
-            # Compose subject and personalized message body
             local subject="Dormant Accounts & Password Expiry Report"
             local body="Hi $name,\n\nThis report is provided by $SYSADMIN_NAME.\n\nPlease find the attached report regarding dormant accounts and password expiries.\n\nThank you."
 
-            # Send the email with report attached (using sendemail)
             sendemail -f "$from_email" \
                       -t "$email" \
                       -u "$subject" \
