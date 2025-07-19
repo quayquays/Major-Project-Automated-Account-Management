@@ -356,7 +356,7 @@ manage_cybersecurity_professionals() {
 
 # -------- Update sysadmin name --------
 update_sysadmin_name() {
-    local CONFIG="/etc/dormant.conf"
+    local CONFIG="/etc/sysadmin_name.conf" 
     local TMPFILE="/tmp/sysadmin_tmp.$$"
 
     # Extract current sysadmin_name value
