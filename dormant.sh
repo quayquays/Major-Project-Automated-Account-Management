@@ -58,6 +58,15 @@ OPT_OUT_FILE="/etc/dormant_opt_out.conf"  # NEW: file for users who opt out (cli
 touch "$OPT_IN_FILE"
 touch "$OPT_OUT_FILE"
 
+# Load user submissions from Flask app to respect yes/no responses
+SUBMISSIONS_FILE="/etc/dormant_submissions.conf"
+declare -A user_responses=()
+if [[ -f "$SUBMISSIONS_FILE" ]]; then
+    while IFS='=' read -r user response; do
+        user_responses["$user"]="$response"
+    done < "$SUBMISSIONS_FILE"
+fi
+
 # Log files
 EMAIL_DEACTIVATION_LOG="/var/log/dormant/deactivated_users.log"
 MANUAL_DEACTIVATION_LOG="/var/log/manual_deactivation.log"
@@ -164,15 +173,25 @@ detect_dormant_user() {
             continue
         fi
 
-        # Check if user has opted in to keep account
-        if grep -q "^$user=" "$OPT_IN_FILE"; then
-            optin_date=$(grep "^$user=" "$OPT_IN_FILE" | cut -d= -f2)
-            optin_ts=$(date -d "$optin_date" +%s 2>/dev/null)
-            today_ts=$(date +%s)
-            days_since_optin=$(( (today_ts - optin_ts) / 86400 ))
+        # Skip if user responded "no" in submissions (opted out / deactivated)
+        if [[ "${user_responses[$user]}" == "no" ]]; then
+            continue
+        fi
 
-            if [ "$days_since_optin" -lt "$DORMANT_USERACCOUNT_DURATION" ]; then
-                continue  # Skip user if they opted in recently
+        # If user responded "yes" in submissions, check opt-in date to skip if dormancy reset is recent
+        if [[ "${user_responses[$user]}" == "yes" ]]; then
+            if grep -q "^$user=" "$OPT_IN_FILE"; then
+                optin_date=$(grep "^$user=" "$OPT_IN_FILE" | cut -d= -f2)
+                optin_ts=$(date -d "$optin_date" +%s 2>/dev/null)
+                today_ts=$(date +%s)
+                days_since_optin=$(( (today_ts - optin_ts) / 86400 ))
+
+                if [ "$days_since_optin" -lt "$DORMANT_USERACCOUNT_DURATION" ]; then
+                    continue  # Skip user if dormancy reset was recent
+                fi
+            else
+                # No opt-in date found, just skip emailing for safety
+                continue
             fi
         fi
 
