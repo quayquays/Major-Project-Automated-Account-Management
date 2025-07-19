@@ -5,6 +5,8 @@ USER_EMAIL_FILE="/etc/user_emails.conf"
 GMAIL_CONFIG_FILE="/etc/gmail.conf"
 CYBERSEC_FILE="/etc/cybersecurity_professionals.conf"
 SYSADMIN_FILE="/etc/sysadmin_name.conf"
+TOKEN_SECRET_FILE="/etc/token_secret.conf"
+NGROK_CONFIG_FILE="/etc/ngrok.conf"
 
 SCRIPT_NAME="dormant.sh"
 SERVER_SCRIPT_NAME="server.py"
@@ -126,6 +128,26 @@ else
     echo "$SYSADMIN_FILE already exists. Skipping creation."
 fi
 
+# Token secret config (auto-generate)
+if [[ ! -f "$TOKEN_SECRET_FILE" ]]; then
+    SECRET=$(openssl rand -base64 32)
+    echo "TOKEN_SECRET=\"$SECRET\"" | sudo tee "$TOKEN_SECRET_FILE" > /dev/null
+    sudo chmod 600 "$TOKEN_SECRET_FILE"
+    echo "Created token secret: $TOKEN_SECRET_FILE"
+else
+    echo "$TOKEN_SECRET_FILE already exists. Skipping creation."
+fi
+
+# Ngrok config file
+if [[ ! -f "$NGROK_CONFIG_FILE" ]]; then
+    cat <<EOF | sudo tee "$NGROK_CONFIG_FILE" > /dev/null
+server_url=https://a765f09180d2.ngrok-free.app
+EOF
+    echo "Created ngrok config: $NGROK_CONFIG_FILE"
+else
+    echo "$NGROK_CONFIG_FILE already exists. Skipping creation."
+fi
+
 echo ""
 echo "----------------------------------------"
 echo "INSTALLING SCRIPTS"
@@ -207,6 +229,8 @@ echo "User emails file            : $USER_EMAIL_FILE"
 echo "Gmail config file           : $GMAIL_CONFIG_FILE"
 echo "Cybersecurity pros config   : $CYBERSEC_FILE"
 echo "Sysadmin name config        : $SYSADMIN_FILE"
+echo "Token secret file           : $TOKEN_SECRET_FILE"
+echo "Ngrok config file           : $NGROK_CONFIG_FILE"
 echo "Dormant script              : $TARGET_PATH"
 echo "Server script               : $SERVER_TARGET"
 echo "Cron schedule               : $DORMANT_CRON_SCHEDULE"
