@@ -869,11 +869,14 @@ edit_existing_user() {
 
 
 # -------- Extract current server_url from script --------
+NGROK_CONF="/etc/ngrok.conf"
+
+# -------- Get current server URL --------
 get_current_server_url() {
-    grep -Po '(?<=local server_url=")[^"]+' "$TARGET_SCRIPT"
+    grep -Po '(?<=^server_url=).*' "$NGROK_CONF"
 }
 
-# -------- Update server URL in script (reuse existing function) --------
+# -------- Update server URL using UI --------
 update_server_url_ui() {
     current_url=$(get_current_server_url)
     dialog --inputbox "Current ngrok URL:\n$current_url\n\nEnter new ngrok URL:" 10 70 "$current_url" 2> "$TMPFILE"
@@ -883,46 +886,38 @@ update_server_url_ui() {
         return
     fi
 
-    # Show confirmation
+    # Confirm change
     dialog --yesno "Change ngrok URL from:\n$current_url\nto\n$new_url?" 10 60
-    if [ $? -ne 0 ]; then
+    if [[ $? -ne 0 ]]; then
         dialog --msgbox "Update cancelled." 6 40
         return
     fi
 
-    # Update script
-    sudo sed -i -r "s|^\s*local server_url=.*|    local server_url=\"$new_url\"  # updated|" "$TARGET_SCRIPT"
+    # Update ngrok.conf
+    echo "server_url=$new_url" | sudo tee "$NGROK_CONF" > /dev/null
 
-    updated_line=$(grep -P '^\s*local server_url=' "$TARGET_SCRIPT")
-    dialog --msgbox "Server URL updated successfully.\n\nUpdated line:\n$updated_line" 10 70
+    dialog --msgbox "Ngrok URL updated successfully.\n\nNew value:\n$new_url" 8 60
 }
-  
 
-
-# -------- generate new ngrok URL and update --------
+# -------- Generate and store new ngrok URL --------
 generate_new_ngrok_url() {
-    # Kill existing ngrok processes to avoid conflict
     pkill ngrok 2>/dev/null
-
-    # Open new terminal and run ngrok
     gnome-terminal -- bash -c "ngrok http 8080; exec bash" &
 
-    # Wait for ngrok to initialize
     sleep 5
 
-    # Fetch forwarding URL from ngrok API
     forwarding_url=$(curl --silent http://127.0.0.1:4040/api/tunnels | \
         grep -Po '"public_url":"https://[^"]+' | head -1 | cut -d':' -f2- | tr -d '"')
 
     if [[ -z "$forwarding_url" ]]; then
-        dialog --msgbox "Failed to get ngrok URL. Make sure ngrok is running." 6 50
+        dialog --msgbox "Failed to get ngrok URL. Make sure ngrok is running." 6 60
         return 1
     fi
 
-    # Update your dormant.sh or config with the new URL
-    sudo sed -i -r "s|^\s*local server_url=.*|    local server_url=\"$forwarding_url\"  # updated URL |" "$TARGET_SCRIPT"
+    # Write to ngrok.conf
+    echo "server_url=$forwarding_url" | sudo tee "$NGROK_CONF" > /dev/null
 
-    dialog --msgbox "New ngrok URL generated:\n$forwarding_url\n\nNgrok running in new terminal." 10 70
+    dialog --msgbox "New ngrok URL saved:\n$forwarding_url\n\nNgrok is running in a new terminal." 10 70
 }
 
 
