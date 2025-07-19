@@ -20,7 +20,7 @@ RESET_FORM_HTML = '''
 </form>
 '''
 
-@app.route('/confirm')
+@app.route('/confirm')backup
 def confirm():
     user = request.args.get('user')
     response = request.args.get('response')
