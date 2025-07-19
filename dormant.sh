@@ -54,7 +54,9 @@ fi
 CYBERSEC_FILE="/etc/cybersecurity_professionals.conf"
 
 OPT_IN_FILE="/etc/dormant_opt_in.conf"
+OPT_OUT_FILE="/etc/dormant_opt_out.conf"  # NEW: file for users who opt out (clicked No)
 touch "$OPT_IN_FILE"
+touch "$OPT_OUT_FILE"
 
 # Log files
 EMAIL_DEACTIVATION_LOG="/var/log/dormant/deactivated_users.log"
@@ -77,6 +79,17 @@ if [[ -f "$REACTIVATION_LOG" ]]; then
             fi
         fi
     done < "$REACTIVATION_LOG"
+fi
+
+# --- Load opted-out users to skip emailing ---
+declare -A opted_out_users=()
+if [[ -f "$OPT_OUT_FILE" ]]; then
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^([^=]+)= ]]; then
+            user="${BASH_REMATCH[1]}"
+            opted_out_users["$user"]=1
+        fi
+    done < "$OPT_OUT_FILE"
 fi
 
 get_user_email() {
@@ -105,7 +118,6 @@ send_email_to_user() {
 
     local confirm_url="${server_url}/confirm?user=${user}&token=${token}&response=yes"
     local deny_url="${server_url}/confirm?user=${user}&token=${token}&response=no"
-
 
     local subject="⚠️ Your account will be deactivated in 7 days"
 
@@ -144,6 +156,11 @@ detect_dormant_user() {
     for user in $user_account; do
         # Skip if user was recently reactivated (within last 24h)
         if [[ -n "${recently_reactivated_users[$user]}" ]]; then
+            continue
+        fi
+
+        # Skip if user opted out of emails
+        if [[ -n "${opted_out_users[$user]}" ]]; then
             continue
         fi
 
