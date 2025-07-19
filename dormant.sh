@@ -22,9 +22,32 @@ fi
 SYSADMIN_NAME_FILE="/etc/sysadmin_name.conf"
 if [[ -f "$SYSADMIN_NAME_FILE" ]]; then
     source "$SYSADMIN_NAME_FILE"  # This will set sysadmin_name variable
-    SYSADMIN_NAME="$sysadmin_name"  # Assign it to your variable
+    SYSADMIN_NAME="$sysadmin_name"
 else
     SYSADMIN_NAME="System Administrator"
+fi
+
+# Load ngrok config for server_url
+NGROK_CONF="/etc/ngrok.conf"
+if [[ -f "$NGROK_CONF" ]]; then
+    source "$NGROK_CONF"  # expects: server_url="http://..."
+else
+    echo "ERROR: Ngrok config not found at $NGROK_CONF"
+    exit 1
+fi
+
+if [[ -z "$server_url" ]]; then
+    echo "ERROR: server_url is empty in $NGROK_CONF"
+    exit 1
+fi
+
+# Load secret key for token HMAC
+TOKEN_SECRET_CONF="/etc/token_secret.conf"
+if [[ -f "$TOKEN_SECRET_CONF" ]]; then
+    source "$TOKEN_SECRET_CONF"  # expects: TOKEN_SECRET="your_secret_key"
+else
+    echo "ERROR: Token secret config not found at $TOKEN_SECRET_CONF"
+    exit 1
 fi
 
 # File containing cybersecurity personnel (name + email)
@@ -61,14 +84,28 @@ get_user_email() {
     grep "^${user}=" "$EMAIL_CONFIG_FILE" 2>/dev/null | cut -d'=' -f2
 }
 
+# Generate HMAC-SHA256 token for user with timestamp
+generate_token() {
+    local user=$1
+    local timestamp
+    timestamp=$(date -u "+%Y%m%d%H%M")  # UTC time to minute
+    # Use openssl to create HMAC-SHA256 and base64url encode without padding
+    local raw_hmac
+    raw_hmac=$(echo -n "${user}:${timestamp}" | openssl dgst -sha256 -hmac "$TOKEN_SECRET" -binary | base64 | tr '+/' '-_' | tr -d '=')
+    echo "${raw_hmac}:${timestamp}"
+}
+
 send_email_to_user() {
     local user=$1
     local email=$2
     local days_inactive=$3
-    local server_url="http://ngrok_url"  # Keep unchanged
 
-    local confirm_url="${server_url}/confirm?user=${user}&response=yes"
-    local deny_url="${server_url}/deactivate/${user}?response=no"
+    local token
+    token=$(generate_token "$user")
+
+    local confirm_url="${server_url}/confirm?user=${user}&token=${token}&response=yes"
+    local deny_url="${server_url}/confirm?user=${user}&token=${token}&response=no"
+
 
     local subject="⚠️ Your account will be deactivated in 7 days"
 
@@ -81,7 +118,7 @@ send_email_to_user() {
             <a href='${confirm_url}' style='color:#4CAF50; text-decoration:none;'>Click here to keep your account</a> &nbsp;&nbsp;
             <a href='${deny_url}' style='color:#f44336; text-decoration:none;'>Click here to deactivate your account</a>
         </p>
-        <p>Thanks,<br>Your System Administrator</p>
+        <p>Thanks,<br>$SYSADMIN_NAME</p>
     </body></html>"
 
     sendemail -f "$from_email" \
@@ -149,20 +186,20 @@ detect_dormant_user() {
                 if [ "$diff_days" -ge "$DORMANT_USERACCOUNT_DURATION" ]; then
                     dormant_detected_user+=("$user")
 
-                    # Check if account is already locked before locking
+                    # Lock account if not already locked
                     if ! passwd -S "$user" | grep -q ' L '; then
                         usermod -L "$user"
                     fi
 
-                    # Check if shell is already /sbin/nologin before changing
+                    # Change shell to /sbin/nologin if not already set
                     current_shell=$(getent passwd "$user" | cut -d: -f7)
                     if [[ "$current_shell" != "/sbin/nologin" ]]; then
                         usermod -s /sbin/nologin "$user"
                     fi
 
-                    # Log deactivation with timestamp
+                    # Log deactivation with timestamp (without inactive days)
                     timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-                    echo "$timestamp - Deactivated user: $user (inactive for $diff_days days)" >> "$AUTO_DEACTIVATION_LOG"
+                    echo "$timestamp - Deactivated user: $user" >> "$AUTO_DEACTIVATION_LOG"
                 fi
             fi
         fi
@@ -238,7 +275,7 @@ generate_report() {
     fi
     echo >> "$report_file"
 
-    # 4. Reactivated Users 🔄
+    # 4. Reactivated Users 🔄"
     echo "Users Reactivated ♻️" >> "$report_file"
     echo "---------------------------------------------------------------------------" >> "$report_file"
     if [[ -s "$REACTIVATION_LOG" ]]; then
