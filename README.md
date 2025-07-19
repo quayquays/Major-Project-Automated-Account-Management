@@ -89,9 +89,22 @@ There are several things you can do in this UI.
 
 - Set up your gmail credentials [ For the SMTP ] ⚠️✨
 - Set up your ngrock
-- I will continue to write more tommorow 
-- 
+- I will continue to write more tommorow
 
+
+
+## If you want to check for the python service.
+
+1) Disable
+
+sudo systemctl stop serverpy.service
+
+sudo systemctl disable serverpy.service
+
+
+3) Update your server.py 
+
+4) Run ./setup.sh
 
     
 
