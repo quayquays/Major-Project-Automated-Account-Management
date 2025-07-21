@@ -101,10 +101,11 @@ sudo systemctl stop serverpy.service
 
 sudo systemctl disable serverpy.service
 
+rm /usr/local/bin/server.py
 
-3) Update your server.py 
+3) Update your server.py
 
-4) Run ./setup.sh
+5) Run ./setup.sh
 
     
 
