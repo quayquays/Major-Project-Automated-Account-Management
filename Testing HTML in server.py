@@ -210,17 +210,28 @@ def reset_password():
         return "⚠️ Invalid or expired password reset link.", 400
 
     if request.method == 'GET':
-       render_template_string(RESET_FORM_HTML, user=user, message="You must update your password to renew your dormancy period.")
-
+        return render_template_string(
+            RESET_FORM_HTML,
+            user=user,
+            message="You must update your password to renew your dormancy period."
+        )
 
     # POST: process form submission
     password = request.form.get('password')
     confirm = request.form.get('confirm_password')
 
     if not password or not confirm:
-        return "⚠️ Please fill both password fields.", 400
+        return render_template_string(
+            RESET_FORM_HTML,
+            user=user,
+            message="⚠️ Please fill both password fields."
+        )
     if password != confirm:
-        return "❌ Passwords do not match.", 400
+        return render_template_string(
+            RESET_FORM_HTML,
+            user=user,
+            message="❌ Passwords do not match."
+        )
 
     try:
         # Reset password
@@ -235,10 +246,18 @@ def reset_password():
         # Update opt-in date to now to reset dormancy
         write_opt_in_date(user)
 
-        success_msg = f"✅ Password updated successfully for {user}. Your dormancy period has been reset. You may now log in."
-        return success_msg
+        return render_template_string(
+            RESET_FORM_HTML,
+            user=user,
+            message=f"✅ Password updated successfully for {user}. Your dormancy period has been reset. You may now log in."
+        )
     except Exception as e:
-        return f"⚠️ Error updating password: {e}", 500
+        return render_template_string(
+            RESET_FORM_HTML,
+            user=user,
+            message=f"⚠️ Error updating password: {e}"
+        )
+
 
 @app.route('/')
 def index():
