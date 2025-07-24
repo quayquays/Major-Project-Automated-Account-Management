@@ -1,13 +1,13 @@
 !/bin/bash
 
-# Paths and temp files
-TMPFILE="/tmp/dormant_ui_tmp.$$"
-REPORT_DIR="/dormant_reports"          # Set your actual report directory here
-EMAIL_CONF="/etc/user_emails.conf"       # Set your email config file path here
-CONFIG_FILE="/etc/dormant.conf"       # Your config file with dormancy variables
-TARGET_SCRIPT="/usr/local/bin/dormant.sh" # Your main script that cron calls
 
-# -------- main menu --------
+TMPFILE="/tmp/dormant_ui_tmp.$$"
+REPORT_DIR="/dormant_reports"       
+EMAIL_CONF="/etc/user_emails.conf"      
+CONFIG_FILE="/etc/dormant.conf"       
+TARGET_SCRIPT="/usr/local/bin/dormant.sh" 
+
+# main menu function 
 main_menu() {
     while true; do
         CHOICE=$(dialog --clear --backtitle "Dormant User Management UI" \
@@ -31,7 +31,7 @@ main_menu() {
     done
 }
 
-# -------- User Management Submenu --------
+# User management menu ( Only for user information ) 
 user_management_menu() {
     while true; do
         CHOICE=$(dialog --clear --backtitle "User Management" \
@@ -43,7 +43,7 @@ user_management_menu() {
             4 "Back to Main Menu" \
             3>&1 1>&2 2>&3)
 
-        case $CHOICE in
+        case $CHOICE in # the following functions to call
             1) create_user ;;
             2) update_email ;;
             3) edit_existing_user ;;
@@ -53,7 +53,7 @@ user_management_menu() {
     done
 }
 
-# -------- System Configuration Submenu --------
+# for systems based configuration
 system_configuration_menu() {
     while true; do
         CHOICE=$(dialog --clear --backtitle "System Configuration" \
@@ -77,9 +77,8 @@ system_configuration_menu() {
     done
 }
 
-# -------- view reports --------
-# New: Reports Menu with extra options
-# -------- Reports Menu with extra options --------
+
+# This is the report menu 
 reports_menu() {
     while true; do
         CHOICE=$(dialog --clear --backtitle "Reports Management" \
@@ -101,6 +100,7 @@ reports_menu() {
     done
 }
 
+# To view the reports
 view_reports() {
     declare -A FILE_MAP
     mapfile -t files < <(ls -t "$REPORT_DIR"/dormant_report_*.txt 2>/dev/null)
@@ -108,8 +108,8 @@ view_reports() {
         dialog --msgbox "No reports found in $REPORT_DIR." 10 40
         return
     fi
-
-    dialog --inputbox "Enter date to search (e.g. 12 July 2025) or leave blank to list all:" 8 60 2> "$TMPFILE"
+#This is to search for the fiie 
+    dialog --inputbox "Enter date to search (e.g.  1 Jan 2025) or leave blank to list all:" 8 60 2> "$TMPFILE"
     search=$(<"$TMPFILE")
 
     OPTIONS=()
@@ -118,13 +118,11 @@ view_reports() {
         rawdate="${filename#dormant_report_}"
         rawdate="${rawdate%.txt}"
 
-        # Split parts: day, month abbrev, year, time (with AM/PM)
         day=$(echo "$rawdate" | cut -d'_' -f1)
         month_abbr=$(echo "$rawdate" | cut -d'_' -f2)
         year=$(echo "$rawdate" | cut -d'_' -f3)
         time_raw=$(echo "$rawdate" | cut -d'_' -f4-)
 
-        # Convert month abbrev to full month name
         case "$month_abbr" in
             Jan) month_full="January" ;;
             Feb) month_full="February" ;;
@@ -141,16 +139,14 @@ view_reports() {
             *) month_full="$month_abbr" ;;
         esac
 
-        # Time raw looks like 09-16_PM or 02-30_AM
-        # Convert to 12-hour with colon and space before AM/PM
+  
         time_formatted=$(echo "$time_raw" | sed -r 's/^([0-9]{2})-([0-9]{2})_(AM|PM)$/\1:\2 \3/')
 
-        # Remove leading zero from hour for nicer format (e.g. 09:16 PM -> 9:16 PM)
+
         time_formatted=$(echo "$time_formatted" | sed -r 's/^0([1-9])/\1/')
 
         display="${day} ${month_full} ${year} at ${time_formatted}"
 
-        # Filter by user search input if given (case insensitive)
         if [[ -z "$search" || "${display,,}" == *"${search,,}"* ]]; then
             OPTIONS+=("$display" "")
             FILE_MAP["$display"]="$file"
@@ -174,10 +170,10 @@ view_reports() {
 
 
 
-# -------- Manage Cybersecurity Professionals --------
+# This function is used for configuring and creating user and their emails 
 
 manage_cybersecurity_professionals() {
-    local FILE="/etc/cybersecurity_professionals.conf"
+    local FILE="/etc/cybersecurity_professionals.conf" #this is the path  where the credentials are stored 
     local TMPFILE="/tmp/cybersec_tmp.$$"
     declare -A professionals
 
@@ -190,13 +186,13 @@ manage_cybersecurity_professionals() {
         } | sudo tee "$FILE" > /dev/null
     }
 
-    # Load entries into associative array
+    #load all this to display
     if [[ -f "$FILE" ]]; then
         while IFS= read -r line; do
-            [[ -z "$line" || "$line" =~ ^# ]] && continue
+            [[ -z "$line" || "$line" =~ ^# ]] 
             if [[ "$line" == *"<"*">" ]]; then
                 name="${line%%<*}"
-                name="${name%" "}"  # trim trailing space
+                name="${name%" "}"  
                 email="${line##*<}"
                 email="${email%%>*}"
                 professionals["$name"]="$email"
@@ -218,7 +214,7 @@ manage_cybersecurity_professionals() {
         [[ -z "$ACTION" || "$ACTION" == "5" ]] && break
 
         case $ACTION in
-            1)  # Search
+            1)   #this part is to search for the username of the cybersecurity professional
                 dialog --inputbox "Enter search keyword (name or email):" 8 50 2> "$TMPFILE"
                 [[ $? -ne 0 ]] && continue
                 keyword=$(<"$TMPFILE")
@@ -242,12 +238,12 @@ manage_cybersecurity_professionals() {
                     dialog --menu "Search results:" 20 60 10 "${OPTIONS[@]}" 3>&1 1>&2 2>&3 >/dev/null
                 fi
                 ;;
-            2)  # Add
+            2)  #this is to create the name of the cybersecurity professinal
                 dialog --inputbox "Enter full name:" 8 50 2> "$TMPFILE"
                 [[ $? -ne 0 ]] && continue
                 new_name=$(<"$TMPFILE")
                 new_name=$(echo "$new_name" | xargs)
-
+                #this is to create the email of the cybersecurity professional
                 dialog --inputbox "Enter email address:" 8 50 2> "$TMPFILE"
                 [[ $? -ne 0 ]] && continue
                 new_email=$(<"$TMPFILE")
@@ -267,7 +263,7 @@ manage_cybersecurity_professionals() {
                 save_professionals
                 dialog --msgbox "User added/updated." 5 30
                 ;;
-            3)  # Edit
+            3)  # 
                 if [ ${#professionals[@]} -eq 0 ]; then
                     dialog --msgbox "No users to edit." 6 40
                     continue
