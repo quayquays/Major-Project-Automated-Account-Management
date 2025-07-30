@@ -22,7 +22,7 @@ SYSTEMD_SERVICE="/etc/systemd/system/serverpy.service"
 
 INSTALLED_PACKAGES=()
 
-# Abort early if dpkg is locked or broken
+# in case there are errors
 if sudo fuser /var/lib/dpkg/lock-frontend &>/dev/null || sudo fuser /var/lib/dpkg/lock &>/dev/null; then
     echo "ERROR: Another package manager is running. Please wait or kill the process."
     exit 1
@@ -66,7 +66,7 @@ echo "----------------------------------------"
 echo "CONFIGURATION FILES"
 echo "----------------------------------------"
 
-# Main config
+# config file very important 
 if [[ ! -f "$CONFIG_FILE" ]]; then
     cat <<EOL | sudo tee "$CONFIG_FILE" > /dev/null
 # configuration file of dormant accounts (USER accounts only)
@@ -89,7 +89,7 @@ else
     echo "$USER_EMAIL_FILE already exists. Skipping creation."
 fi
 
-# Gmail config
+# for gmail 
 if [[ ! -f "$GMAIL_CONFIG_FILE" ]]; then
     cat <<EOL | sudo tee "$GMAIL_CONFIG_FILE" > /dev/null
 # Gmail SMTP credentials for sending alerts
@@ -116,7 +116,7 @@ else
     echo "$CYBERSEC_FILE already exists. Skipping creation."
 fi
 
-# Sysadmin name config
+
 if [[ ! -f "$SYSADMIN_FILE" ]]; then
     cat <<EOL | sudo tee "$SYSADMIN_FILE" > /dev/null
 # Sysadmin name for report header
@@ -128,7 +128,7 @@ else
     echo "$SYSADMIN_FILE already exists. Skipping creation."
 fi
 
-# Token secret config (auto-generate)
+# token secret config 
 if [[ ! -f "$TOKEN_SECRET_FILE" ]]; then
     SECRET=$(openssl rand -base64 32)
     echo "TOKEN_SECRET=\"$SECRET\"" | sudo tee "$TOKEN_SECRET_FILE" > /dev/null
@@ -138,7 +138,7 @@ else
     echo "$TOKEN_SECRET_FILE already exists. Skipping creation."
 fi
 
-# Ngrok config file
+# for ngorck config file 
 if [[ ! -f "$NGROK_CONFIG_FILE" ]]; then
     cat <<EOF | sudo tee "$NGROK_CONFIG_FILE" > /dev/null
 server_url=https://a765f09180d2.ngrok-free.app
@@ -153,7 +153,7 @@ echo "----------------------------------------"
 echo "INSTALLING SCRIPTS"
 echo "----------------------------------------"
 
-# Install dormant.sh
+# it installs dormant.sh
 if [[ -f "$LOCAL_PATH" ]]; then
     sudo cp "$LOCAL_PATH" "$TARGET_PATH"
     sudo chmod +x "$TARGET_PATH"
@@ -163,7 +163,7 @@ else
     exit 1
 fi
 
-# Install server.py
+# installs server.py and then make sure that it is set up as a service.
 if [[ -f "$SERVER_LOCAL_PATH" ]]; then
     sudo cp "$SERVER_LOCAL_PATH" "$SERVER_TARGET"
     sudo chmod +x "$SERVER_TARGET"
@@ -173,11 +173,11 @@ else
     exit 1
 fi
 
-# Ensure logs exist and set permissions
+
 sudo touch "$DORMANT_LOG" "$SERVER_LOG"
 sudo chmod 666 "$DORMANT_LOG" "$SERVER_LOG"
 
-# Load config for cron validation
+
 source "$CONFIG_FILE"
 
 if [[ -z "$DORMANT_CRON_SCHEDULE" ]]; then
