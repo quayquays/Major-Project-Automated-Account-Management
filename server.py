@@ -5,7 +5,7 @@ import base64
 import datetime
 import os
 import subprocess
-
+#use subprocess so that it can run commands 
 app = Flask(__name__)
 
 OPT_IN_FILE = "/etc/dormant_opt_in.conf"
@@ -13,7 +13,7 @@ DEACTIVATED_LOG = "/var/log/dormant/deactivated_users.log"
 SUBMISSIONS_FILE = "/etc/dormant_submissions.conf"
 TOKEN_SECRET_CONF = "/etc/token_secret.conf"
 
-# Load token secret from file
+# load the secret key from the token file 
 def load_token_secret():
     with open(TOKEN_SECRET_CONF, 'r') as f:
         for line in f:
@@ -111,7 +111,7 @@ RESET_FORM_HTML = '''
 '''
 
 
-# Helpers to read/write submission status to block reuse
+# avoid resubmissions
 def read_submissions():
     submissions = {}
     if os.path.exists(SUBMISSIONS_FILE):
@@ -130,8 +130,7 @@ def write_submission(user, response):
     with open(SUBMISSIONS_FILE, 'w') as f:
         for u, r in submissions.items():
             f.write(f"{u}={r}\n")
-
-# Token verification function
+#verifies token
 def verify_token(user, token):
     try:
         hmac_part, timestamp = token.split(':',1)
@@ -146,7 +145,7 @@ def verify_token(user, token):
 
     return hmac.compare_digest(hmac_part, expected_token)
 
-# Write opt-in date for user
+# opt it date for the user
 def write_opt_in_date(user):
     now = datetime.datetime.now().strftime("%Y-%m-%d")
     os.makedirs(os.path.dirname(OPT_IN_FILE), exist_ok=True)
@@ -160,7 +159,7 @@ def write_opt_in_date(user):
                 f.write(line)
         f.write(f"{user}={now}\n")
 
-# Deactivate user function
+# deactivate user fucntion 
 def deactivate_user(user):
     try:
         subprocess.run(['usermod', '-L', user], check=True)
