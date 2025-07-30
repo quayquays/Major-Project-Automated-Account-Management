@@ -350,12 +350,12 @@ manage_cybersecurity_professionals() {
 }
 
 
-# -------- Update sysadmin name --------
+#this part is to update the sysadmin name
 update_sysadmin_name() {
     local CONFIG="/etc/sysadmin_name.conf" 
     local TMPFILE="/tmp/sysadmin_tmp.$$"
 
-    # Extract current sysadmin_name value
+    # extracts the current sysadmin name from sysadmin_name.conf
     local current_name=$(grep -Po '^sysadmin_name=".*?"' "$CONFIG" 2>/dev/null | sed -E 's/sysadmin_name="(.*)"/\1/')
 
     # Prompt user to update
@@ -389,7 +389,7 @@ update_sysadmin_name() {
 }
 
 
-# -------- set account expiry --------
+# this is to set account expiry.
 set_expiry() {
     # Get all users with UID >= 1000 (normal users)
     mapfile -t all_users < <(awk -F: '($3>=1000)&&($1!="nobody"){print $1}' /etc/passwd)
@@ -424,7 +424,7 @@ set_expiry() {
             fi
         fi
 
-        # Build options array with username + expiry date
+       
         OPTIONS=()
         for u in "${filtered_users[@]}"; do
             # Get expiry date, fallback to "No expiry"
@@ -433,13 +433,13 @@ set_expiry() {
             OPTIONS+=("$u" "$expiry")
         done
 
-        # Show menu to pick a user
+        # allows admin to select a user
         selected_user=$(dialog --menu "Select a user to set expiry date:\n(Search: $search)" 20 70 15 "${OPTIONS[@]}" 3>&1 1>&2 2>&3)
         if [ -z "$selected_user" ]; then
             return
         fi
 
-        # Input new expiry date
+        # inputs the expiry date
         dialog --inputbox "Enter expiry date for $selected_user (YYYY-MM-DD), or empty to remove expiry:" 8 60 2> "$TMPFILE"
         if [ $? -ne 0 ]; then
             continue
@@ -451,7 +451,7 @@ set_expiry() {
             sudo chage -E -1 "$selected_user"
             dialog --msgbox "Expiry removed for user $selected_user." 8 50
         else
-            # Validate date format
+         
             if date -d "$expiry_date" &>/dev/null; then
                 sudo chage -E "$expiry_date" "$selected_user"
                 dialog --msgbox "Expiry date set for $selected_user: $expiry_date" 8 50
@@ -464,7 +464,7 @@ set_expiry() {
 
     
 
-# -------- create user --------
+# creates user
 create_user() {
     step=1
     newuser=""
@@ -560,7 +560,7 @@ create_user() {
     done
 }
 
-# -------- update email (single user) --------
+# updates email
 update_email() {
     if [ ! -f "$EMAIL_CONF" ]; then
         dialog --msgbox "Email config file not found at $EMAIL_CONF." 8 50
@@ -592,7 +592,7 @@ update_email() {
     dialog --msgbox "Email for $selected_user updated successfully." 8 50
 }
 
-# -------- update config --------
+#this is to update the configuration file /etc/dormant.conf
 update_config() {
     if [ ! -f "$CONFIG_FILE" ]; then
         dialog --msgbox "Config file not found: $CONFIG_FILE" 8 50
@@ -664,10 +664,9 @@ update_config() {
                 return
             fi
 
-            # Update config file
             sudo sed -i "s|^DORMANT_CRON_SCHEDULE=.*|DORMANT_CRON_SCHEDULE=\"$NEW\"|" "$CONFIG_FILE"
 
-            # Update crontab: remove old entry for TARGET_SCRIPT and add new one
+    
             (crontab -l 2>/dev/null | grep -v "$TARGET_SCRIPT" ; echo "$NEW bash $TARGET_SCRIPT") | crontab -
 
             dialog --msgbox "Crontab updated with schedule:\n$NEW" 6 50
@@ -679,11 +678,11 @@ update_config() {
             ;;
     esac
 
-    # Reload config to apply changes
+#apply changes
     source "$CONFIG_FILE"
 }
 
-# -------- edit existing user --------
+#this is to edit existing users
 edit_existing_user() {
     declare -A user_emails
     if [ -f "$EMAIL_CONF" ]; then
@@ -741,7 +740,7 @@ edit_existing_user() {
         email="${user_emails[$selected_user]:-No email}"
         has_sudo=$(echo "$groups" | grep -qw "sudo" && echo "Yes" || echo "No")
 
-        # Check if user is locked (deactivated)
+        # check if the user is deactivated
         passwd_status=$(sudo passwd -S "$selected_user" 2>/dev/null)
         if echo "$passwd_status" | grep -q " L "; then
             active_status="Deactivated (Locked)"
@@ -863,16 +862,15 @@ edit_existing_user() {
 }
 
 
-
-# -------- Extract current server_url from script --------
+#this part is for the ngrok
 NGROK_CONF="/etc/ngrok.conf"
 
-# -------- Get current server URL --------
+# get the current ngrock server url
 get_current_server_url() {
     grep -Po '(?<=^server_url=).*' "$NGROK_CONF"
 }
 
-# -------- Update server URL using UI --------
+# it updates the server url through the UI
 update_server_url_ui() {
     current_url=$(get_current_server_url)
     dialog --inputbox "Current ngrok URL:\n$current_url\n\nEnter new ngrok URL:" 10 70 "$current_url" 2> "$TMPFILE"
@@ -882,20 +880,20 @@ update_server_url_ui() {
         return
     fi
 
-    # Confirm change
+
     dialog --yesno "Change ngrok URL from:\n$current_url\nto\n$new_url?" 10 60
     if [[ $? -ne 0 ]]; then
         dialog --msgbox "Update cancelled." 6 40
         return
     fi
 
-    # Update ngrok.conf
+    # it updates ngrock.conf
     echo "server_url=$new_url" | sudo tee "$NGROK_CONF" > /dev/null
 
     dialog --msgbox "Ngrok URL updated successfully.\n\nNew value:\n$new_url" 8 60
 }
 
-# -------- Generate and store new ngrok URL --------
+# stores new ngrock
 generate_new_ngrok_url() {
     pkill ngrok 2>/dev/null
     gnome-terminal -- bash -c "ngrok http 8080; exec bash" &
@@ -910,20 +908,19 @@ generate_new_ngrok_url() {
         return 1
     fi
 
-    # Write to ngrok.conf
+  #update the ngrock file 
     echo "server_url=$forwarding_url" | sudo tee "$NGROK_CONF" > /dev/null
 
     dialog --msgbox "New ngrok URL saved:\n$forwarding_url\n\nNgrok is running in a new terminal." 10 70
 }
 
 
-   
-# -------- Update Gmail Cedentials UI (Combined Email & App Password) --------
+#to update the gmail credential so that the admin can forward email to users
 update_gmail_credentials_ui() {
     local GMAIL_CONF="/etc/gmail.conf"
     local TMPFILE=$(mktemp)
 
-    # Load current values or set defaults
+#shows the current value
     local current_from=""
     local current_login=""
     local current_password=""
@@ -935,25 +932,25 @@ update_gmail_credentials_ui() {
         current_password=${app_password:-""}
     fi
 
-    # Show current config summary
+ #gives a brief summary 
     dialog --msgbox "Current Gmail Credentials:\n\nFrom Email: $current_from\nLogin Email: $current_login\nApp Password: $current_password" 12 60
 
-    # Update From Email
+  
     dialog --inputbox "Enter From Email (-f):" 8 60 "$current_from" 2> "$TMPFILE"
     local new_from=$(<"$TMPFILE")
     [[ -z "$new_from" ]] && { dialog --msgbox "From Email cannot be empty. Update cancelled." 6 50; rm -f "$TMPFILE"; return 1; }
 
-    # Update Login Email
+
     dialog --inputbox "Enter Login Email (-xu):" 8 60 "$current_login" 2> "$TMPFILE"
     local new_login=$(<"$TMPFILE")
     [[ -z "$new_login" ]] && { dialog --msgbox "Login Email cannot be empty. Update cancelled." 6 50; rm -f "$TMPFILE"; return 1; }
 
-    # Update App Password (plain input, no masking)
+
     dialog --inputbox "Enter App Password (-xp):" 8 60 "$current_password" 2> "$TMPFILE"
     local new_password=$(<"$TMPFILE")
     [[ -z "$new_password" ]] && { dialog --msgbox "App Password cannot be empty. Update cancelled." 6 50; rm -f "$TMPFILE"; return 1; }
 
-    # Confirm updates with visible password
+  
     dialog --yesno "Confirm update Gmail credentials?\n\nFrom Email: $new_from\nLogin Email: $new_login\nApp Password: $new_password" 10 60
     if [[ $? -ne 0 ]]; then
         dialog --msgbox "Update cancelled." 6 40
@@ -961,7 +958,7 @@ update_gmail_credentials_ui() {
         return 1
     fi
 
-    # Write new config securely with lowercase variable names
+ 
     sudo bash -c "cat > $GMAIL_CONF" <<EOL
 # Gmail SMTP credentials for sending alerts
 from_email=$new_from
@@ -977,8 +974,7 @@ EOL
     return 0
 }
 
-
-# ------------- Start script -------------
+# start script 
 main_menu
 clear
 rm -f "$TMPFILE"
