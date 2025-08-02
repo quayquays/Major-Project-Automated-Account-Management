@@ -13,7 +13,6 @@ DEACTIVATED_LOG = "/var/log/dormant/deactivated_users.log"
 SUBMISSIONS_FILE = "/etc/dormant_submissions.conf"
 TOKEN_SECRET_CONF = "/etc/token_secret.conf"
 
-# use the secret key to make things secure
 def load_token_secret():
     with open(TOKEN_SECRET_CONF, 'r') as f:
         for line in f:
@@ -22,7 +21,6 @@ def load_token_secret():
     raise Exception("TOKEN_SECRET not found in /etc/token_secret.conf")
 
 TOKEN_SECRET = load_token_secret()
-
 
 RESET_FORM_HTML = '''
 <!DOCTYPE html>
@@ -156,7 +154,6 @@ MESSAGE_HTML = '''
 </html>
 '''
 
-
 def read_submissions():
     submissions = {}
     if os.path.exists(SUBMISSIONS_FILE):
@@ -176,7 +173,6 @@ def write_submission(user, response):
         for u, r in submissions.items():
             f.write(f"{u}={r}\n")
 
-#verify token
 def verify_token(user, token):
     try:
         hmac_part, timestamp = token.split(':', 1)
@@ -189,7 +185,6 @@ def verify_token(user, token):
     expected_token = base64.urlsafe_b64encode(expected_hmac).rstrip(b'=').decode()
 
     return hmac.compare_digest(hmac_part, expected_token)
-
 
 def write_opt_in_date(user):
     now = datetime.datetime.now().strftime("%Y-%m-%d")
@@ -204,7 +199,6 @@ def write_opt_in_date(user):
                 f.write(line)
         f.write(f"{user}={now}\n")
 
-# Deactivate user account
 def deactivate_user(user):
     try:
         subprocess.run(['usermod', '-L', user], check=True)
@@ -215,7 +209,6 @@ def deactivate_user(user):
     except Exception as e:
         raise RuntimeError(f"Failed to deactivate user {user}: {e}")
 
-#this is to confirm
 @app.route('/confirm')
 def confirm():
     user = request.args.get('user')
@@ -242,10 +235,10 @@ def confirm():
             return render_template_string(MESSAGE_HTML, icon="✅", message=f"Your account '{user}' has been deactivated.")
         except Exception as e:
             return render_template_string(MESSAGE_HTML, icon="⚠️", message=f"Error deactivating account: {e}"), 500
-# this is to reset password
+
 @app.route('/reset_password', methods=['GET', 'POST'])
 def reset_password():
-    user = request.args.get('user') or request.form.get('user') #get the uername
+    user = request.args.get('user') or request.form.get('user')
     if not user:
         return render_template_string(MESSAGE_HTML, icon="⚠️", message="Missing user."), 400
 
@@ -284,17 +277,25 @@ def reset_password():
         subprocess.run(['usermod', '-s', '/bin/bash', user], check=True)
         write_opt_in_date(user)
 
-        return render_template_string(
-            RESET_FORM_HTML,
-            user=user,
-            message=f"✅ Password updated successfully for {user}. Your dormancy period has been reset. You may now log in."
-        )
+        return redirect(url_for('reactivated', user=user))
+
     except Exception as e:
         return render_template_string(
             RESET_FORM_HTML,
             user=user,
             message=f"⚠️ Error updating password: {e}"
         )
+
+@app.route('/reactivated')
+def reactivated():
+    user = request.args.get('user')
+    if not user:
+        return render_template_string(MESSAGE_HTML, icon="⚠️", message="Missing user.")
+    return render_template_string(
+        MESSAGE_HTML,
+        icon="✅",
+        message=f"User '{user}' has been reactivated. Please log in. Thanks!"
+    )
 
 @app.route('/')
 def index():
