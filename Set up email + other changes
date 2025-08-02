@@ -732,3 +732,53 @@ echo "Renamed $old_user to $new_user ($display)"
     cursor: pointer;
     transition: background-color 0.3s ease;
   }
+
+
+
+#!/usr/bin/env python3
+import os
+import struct
+import pwd
+import time
+import random
+
+LASTLOG_PATH = "/var/log/lastlog"
+
+# Only include normal users (e.g., UID >= 1000 and exclude system accounts)
+MIN_UID = 1000
+
+# Fetch all users
+users = [u for u in pwd.getpwall() if u.pw_uid >= MIN_UID and u.pw_uid < 60000]
+
+for pw in users:
+    username = pw.pw_name
+    uid = pw.pw_uid
+
+    # Apply your login rules (you can change these as needed)
+    if uid % 3 == 0:
+        days_ago = random.randint(71, 100)
+    elif uid % 5 == 0:
+        days_ago = random.randint(31, 69)
+    elif uid % 2 == 0:
+        days_ago = random.randint(51, 70)
+    else:
+        days_ago = random.randint(1, 29)
+
+    login_time = int(time.time() - days_ago * 86400)
+    line = b"pts/0".ljust(32, b'\x00')
+    host = b"localhost".ljust(256, b'\x00')
+
+    # Structure: time (I), line (32s), host (256s)
+    data = struct.pack("I32s256s", login_time, line, host)
+
+    offset = uid * struct.calcsize("I32s256s")
+
+    try:
+        with open(LASTLOG_PATH, "r+b") as f:
+            f.seek(offset)
+            f.write(data)
+        print(f"✅ Updated {username} (UID {uid}) to {days_ago} days ago.")
+    except PermissionError:
+        print(f"❌ Permission denied when updating {username}. Run as root.")
+    except Exception as e:
+        print(f"❌ Failed to update {username}: {e}")
