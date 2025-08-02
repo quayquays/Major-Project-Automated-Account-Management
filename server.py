@@ -13,7 +13,7 @@ DEACTIVATED_LOG = "/var/log/dormant/deactivated_users.log"
 SUBMISSIONS_FILE = "/etc/dormant_submissions.conf"
 TOKEN_SECRET_CONF = "/etc/token_secret.conf"
 
-# Load the secret key from the config file
+# use the secret key to make things secure
 def load_token_secret():
     with open(TOKEN_SECRET_CONF, 'r') as f:
         for line in f:
@@ -23,7 +23,7 @@ def load_token_secret():
 
 TOKEN_SECRET = load_token_secret()
 
-# Password reset form HTML
+
 RESET_FORM_HTML = '''
 <!DOCTYPE html>
 <html lang="en">
@@ -110,7 +110,6 @@ RESET_FORM_HTML = '''
 </html>
 '''
 
-# General message template (for success/failure/info)
 MESSAGE_HTML = '''
 <!DOCTYPE html>
 <html lang="en">
@@ -157,7 +156,7 @@ MESSAGE_HTML = '''
 </html>
 '''
 
-# Utility: Read previous submissions
+
 def read_submissions():
     submissions = {}
     if os.path.exists(SUBMISSIONS_FILE):
@@ -169,7 +168,6 @@ def read_submissions():
                     submissions[user] = response
     return submissions
 
-# Utility: Write submission
 def write_submission(user, response):
     submissions = read_submissions()
     submissions[user] = response
@@ -178,7 +176,7 @@ def write_submission(user, response):
         for u, r in submissions.items():
             f.write(f"{u}={r}\n")
 
-# Verify token
+#verify token
 def verify_token(user, token):
     try:
         hmac_part, timestamp = token.split(':', 1)
@@ -192,7 +190,7 @@ def verify_token(user, token):
 
     return hmac.compare_digest(hmac_part, expected_token)
 
-# Save opt-in date
+
 def write_opt_in_date(user):
     now = datetime.datetime.now().strftime("%Y-%m-%d")
     os.makedirs(os.path.dirname(OPT_IN_FILE), exist_ok=True)
@@ -217,7 +215,7 @@ def deactivate_user(user):
     except Exception as e:
         raise RuntimeError(f"Failed to deactivate user {user}: {e}")
 
-# Confirmation route
+#this is to confirm
 @app.route('/confirm')
 def confirm():
     user = request.args.get('user')
@@ -244,11 +242,10 @@ def confirm():
             return render_template_string(MESSAGE_HTML, icon="✅", message=f"Your account '{user}' has been deactivated.")
         except Exception as e:
             return render_template_string(MESSAGE_HTML, icon="⚠️", message=f"Error deactivating account: {e}"), 500
-
-# Password reset route
+# this is to reset password
 @app.route('/reset_password', methods=['GET', 'POST'])
 def reset_password():
-    user = request.args.get('user') or request.form.get('user')
+    user = request.args.get('user') or request.form.get('user') #get the uername
     if not user:
         return render_template_string(MESSAGE_HTML, icon="⚠️", message="Missing user."), 400
 
