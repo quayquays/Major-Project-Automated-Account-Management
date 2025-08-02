@@ -707,3 +707,28 @@ reuben.nicholson=reuben.nicholson@fakeinbox.com
 
 display="${display_name_map[$new_user]}"
 echo "Renamed $old_user to $new_user ($display)"
+
+
+ input[type="password"] {
+    width: 90%;
+    margin: 0 auto 1.25rem auto; 
+    display: block;
+    padding: 0.75rem;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-size: 1rem;
+  }
+
+  input[type="submit"] {
+    width: 90%;
+    display: block;
+    margin: 0 auto;
+    padding: 0.75rem;
+    background-color: #7c3aed;
+    color: white;
+    font-weight: bold;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+  }
