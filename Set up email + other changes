@@ -507,3 +507,92 @@ check_user_account
 detect_dormant_user
 check_password_expiry
 generate_report
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+change names 
+#!/bin/bash
+
+# Mapping of old usernames to new usernames
+declare -A user_map=(
+  [user01]=alicia.morris
+  [user02]=daniel.james
+  [user03]=sophie.reed
+  [user04]=liam.wright
+  [user05]=chloe.davis
+  [user06]=ethan.cooper
+  [user07]=mia.turner
+  [user08]=joshua.lee
+  [user09]=amelia.bennett
+  [user10]=logan.bailey
+  [user11]=olivia.mitchell
+  [user12]=noah.hughes
+  [user13]=ava.richards
+  [user14]=harry.morris
+  [user15]=ella.evans
+  [user16]=jacob.wells
+  [user17]=grace.webb
+  [user18]=freddie.shaw
+  [user19]=ruby.howard
+  [user20]=leo.ward
+  [user21]=emily.barker
+  [user22]=oscar.simpson
+  [user23]=lily.harrison
+  [user24]=archie.brooks
+  [user25]=isla.dixon
+  [user26]=theo.morgan
+  [user27]=millie.chapman
+  [user28]=sebastian.bell
+  [user29]=ivy.harvey
+  [user30]=alfie.elliott
+  [user31]=phoebe.knight
+  [user32]=harvey.gray
+  [user33]=rosie.hart
+  [user34]=isaac.matthews
+  [user35]=zara.fisher
+  [user36]=mason.holmes
+  [user37]=lottie.stone
+  [user38]=harrison.clarke
+  [user39]=maisie.cook
+  [user40]=finley.gibson
+  [user41]=nancy.murray
+  [user42]=blake.ford
+  [user43]=esme.bradley
+  [user44]=leon.kerr
+  [user45]=poppy.burton
+  [user46]=felix.reynolds
+  [user47]=flora.bates
+  [user48]=ollie.hamilton
+  [user49]=annabelle.page
+  [user50]=reuben.nicholson
+)
+
+for old_user in "${!user_map[@]}"; do
+  new_user="${user_map[$old_user]}"
+
+  # Check if old user exists
+  if id "$old_user" &>/dev/null; then
+    echo "Renaming $old_user → $new_user"
+
+    # Rename the user and move home directory
+    sudo usermod -l "$new_user" -d "/home/$new_user" -m "$old_user"
+
+    # Optional: update group name to match new user
+    if getent group "$old_user" > /dev/null; then
+      sudo groupmod -n "$new_user" "$old_user"
+    fi
+  else
+    echo "⚠️  User $old_user not found. Skipping..."
+  fi
+done
