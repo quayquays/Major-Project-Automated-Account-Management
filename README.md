@@ -58,7 +58,7 @@ sudo kill -9 <id>
 
 ### 4. Set up Ngrock account.
 
-Thanks Yu Xuan for the detailed steps, I just copy paste 🥹🥰
+
 
 1. Go to ngrok's website and create an account
 2. Go to "Setup & Installation" -> "Linux" -> "Apt" -> Follow the steps given (stop before "Deploy your app online")
@@ -89,7 +89,7 @@ There are several things you can do in this UI.
 
 - Set up your gmail credentials [ For the SMTP ] ⚠️✨
 - Set up your ngrock
-- I will continue to write more tommorow
+
 
 
 
